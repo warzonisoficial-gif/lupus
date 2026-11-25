@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Eclipse no Vilarejo — Multiplayer Social Deduction</title>
+    <link rel="stylesheet" href="/src/client/styles.css" />
+  </head>
+  <body>
+    <div id="app-viewport">
+      <!-- Canvas Phaser 3 em Tela Cheia -->
+      <div id="phaser-container"></div>
+
+      <!-- HUD Superior Unificado e Alinhado (Estilo Jogo Mobile/PC Profissional) -->
+      <header id="top-hud">
+        <!-- Esquerda: 1 Único Card Integrado (Retrato + Classe + Barra de Missão) -->
+        <div class="hud-left-group">
+          <div class="hud-unified-player-card">
+            <div class="hud-avatar-frame">
+              <img id="hud-hero-portrait" class="hud-portrait-img" alt="Herói" src="" />
+              <span id="hud-account-level" class="hud-level-tag">Nv.12</span>
+            </div>
+
+            <div class="hud-player-details">
+              <div class="hud-title-row">
+                <div class="hud-role-identity">
+                  <span id="player-role-title" class="role-name">Aldeão</span>
+                  <span class="hud-dot-sep">•</span>
+                  <span id="player-secret-alignment" class="role-sub">MORADOR</span>
+                </div>
+                <span id="mission-pct" class="gauge-pct">0%</span>
+              </div>
+
+              <div class="hud-mission-subtitle">
+                <span id="mission-label" class="gauge-title">Buscar água no poço distante</span>
+              </div>
+
+              <div class="game-gauge-track">
+                <div id="mission-bar" class="game-gauge-fill" style="width: 0%"></div>
+                <div class="gauge-segments">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Passiva ESCAPE compacta (aparece acoplada apenas quando for o Lobisomem) -->
+          <div id="werewolf-escape-box" class="hud-wolf-escape-pill hidden">
+            <div class="escape-pill-header">
+              <span>ESCAPE</span>
+              <strong id="escape-status-text">0/2</strong>
+            </div>
+            <div class="game-gauge-track slim-track">
+              <div id="escape-bar" class="game-gauge-fill wolf-fill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Centro: Barra Horizontal Única de Status da Partida (Sem quebrar linhas!) -->
+        <div class="hud-center-status-bar">
+          <span id="hud-phase-badge" class="phase-crest">FASE 1: INVESTIGAÇÃO</span>
+          <span class="status-divider"></span>
+          <span id="hud-timer" class="metric-item">04:00</span>
+          <span class="status-divider"></span>
+          <span id="hud-eclipse" class="metric-eclipse">Lua Clara (30s)</span>
+          <span id="hud-bell-wrap" class="hidden">
+            <span class="status-divider"></span>
+            <span id="hud-bell-hp" class="metric-item">Sino: 500 HP</span>
+          </span>
+        </div>
+
+        <!-- Direita: Botões de Ação do Topo Alinhados na Mesma Altura (Sem quebrar texto!) -->
+        <div class="hud-right-actions">
+          <span id="hud-account-xp" class="hud-xp-badge">15.000 XP</span>
+          <button id="btn-open-classes" class="btn-hud-pill">
+            <svg class="btn-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span>Classes (20)</span>
+          </button>
+          <button id="btn-toggle-drawer" class="btn-hud-pill">
+            <svg class="btn-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+            <span>Menu</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Gaveta Flutuante Direita (Simulação & Crônicas) -->
+      <aside id="tactical-drawer" class="tactical-drawer hidden">
+        <div class="drawer-section">
+          <div class="drawer-header">
+            <h3>Detalhes da Habilidade</h3>
+            <button id="btn-close-drawer" class="btn-secondary btn-sm">Fechar</button>
+          </div>
+          <p id="player-ability-desc" class="card-subtext">
+            Corre 40% mais rápido por 3 segundos para fugir do perigo.
+          </p>
+        </div>
+
+        <div class="drawer-section">
+          <h3>Simulação Rápida (MVP)</h3>
+          <div class="controls-grid">
+            <button id="btn-start-match" class="btn-primary">
+              Reiniciar Partida (9 Jogadores)
+            </button>
+            <button id="btn-test-wolf" class="btn-secondary">
+              Jogar como Lobisomem (Com Escape)
+            </button>
+            <button id="btn-test-hunter" class="btn-secondary">
+              Jogar como Caçador (2 Armadilhas)
+            </button>
+            <button id="btn-test-tribunal" class="btn-secondary">
+              Convocar Tribunal da Igreja (Fase 2)
+            </button>
+            <button id="btn-test-bloodmoon" class="btn-secondary">
+              Iniciar Lua de Sangue (Fase 3 - 90s)
+            </button>
+            <button id="btn-test-kill-anim" class="btn-secondary">
+              Testar Ataque do Lobisomem (Fatiado por Garras)
+            </button>
+            <button id="btn-test-wheel" class="btn-secondary">
+              Testar Roda da Vitória (Skill Check)
+            </button>
+          </div>
+        </div>
+
+        <div class="drawer-section grow-section">
+          <div class="drawer-header">
+            <h3>Crônicas da Noite</h3>
+            <span id="alive-counter" class="meta-count">9 vivos</span>
+          </div>
+          <ul id="kill-feed-list" class="event-list"></ul>
+        </div>
+      </aside>
+
+      <!-- Camada Inferior: Joystick Analógico + Botões de Ação Contextuais (Só aparecem por proximidade!) -->
+      <div id="bottom-controls-layer">
+        <!-- Joystick Virtual Touch / Mouse -->
+        <div id="joystick-zone" class="joystick-base">
+          <div class="joystick-ring-inner"></div>
+          <div id="joystick-knob" class="joystick-stick"></div>
+        </div>
+
+        <!-- Botões de Ação Estilo Jogo (Aparecem apenas quando disponíveis/próximos!) -->
+        <div class="action-pad">
+          <!-- 1. Transformar em Lobo (Só aparece para o Lobisomem dentro de Zona de Ocultação ou já transformado) -->
+          <button id="btn-action-transform" class="game-action-orb orb-wolf hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 2L9 7L4 6L6 11L3 16L9 15L12 21L15 15L21 16L18 11L20 6L15 7L12 2Z" />
+            </svg>
+            <span id="transform-btn-label" class="orb-label">LOBO</span>
+            <span class="orb-hotkey">Q</span>
+          </button>
+
+          <!-- 1.5. Entrar / Sair do Barril de Esconderijo (SÓ aparece quando perto de um barril ou escondido nele!) -->
+          <button id="btn-action-barrel" class="game-action-orb orb-barrel hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <ellipse cx="12" cy="5" rx="7" ry="2.5" />
+              <path d="M5 5v14c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5" />
+              <path d="M5 10c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5" />
+              <path d="M5 15c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5" />
+            </svg>
+            <span id="barrel-btn-label" class="orb-label">BARRIL</span>
+            <span class="orb-hotkey">F</span>
+          </button>
+
+          <!-- 1.6. Entrar / Sair da Tumba no Cemitério (EXCLUSIVO para o Lobisomem quando perto de uma Tumba!) -->
+          <button id="btn-action-tomb" class="game-action-orb orb-tomb hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M4 18h16v3H4z" />
+              <path d="M6 18V9a6 6 0 0 1 12 0v9" />
+              <path d="M12 7v6M9.5 9.5h5" />
+            </svg>
+            <span id="tomb-btn-label" class="orb-label">TUMBA</span>
+            <span class="orb-hotkey">T</span>
+          </button>
+
+          <!-- 1.7. Colocar Madeira (Lobisomem) / Remover Madeira em 4s Incancelável (Qualquer Jogador) -->
+          <button id="btn-action-barricade" class="game-action-orb orb-barricade hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M3 7h18v4H3zM3 14h18v4H3z" />
+              <path d="M7 4v16M17 4v16" />
+            </svg>
+            <span id="barricade-btn-label" class="orb-label">MADEIRA</span>
+            <span class="orb-hotkey">B</span>
+          </button>
+
+          <!-- 2. Reportar Corpo / Tocar Sino (SÓ aparece quando perto de um corpo ou perto do Sino da Igreja!) -->
+          <button id="btn-action-report" class="game-action-orb orb-report hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span id="report-btn-label" class="orb-label">SINO</span>
+            <span class="orb-hotkey">R</span>
+          </button>
+
+          <!-- 3. Usar Habilidade da Classe / Ataque do Lobo (SÓ aparece quando desbloqueada ou em forma de Lobo!) -->
+          <button id="btn-action-ability" class="game-action-orb orb-ability hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span id="ability-btn-title" class="orb-label">USAR</span>
+            <span id="ability-btn-charges" class="orb-charges">2x</span>
+            <span class="orb-hotkey">ESPAÇO</span>
+          </button>
+
+          <!-- 4. Fazer Missão / Destruir Totem (SÓ aparece quando o jogador entra no local da missão ou perto de um Totem!) -->
+          <button id="btn-action-mission" class="game-action-orb orb-mission hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+            <span id="mission-btn-label" class="orb-label">MISSÃO</span>
+            <span class="orb-hotkey">E</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- MODAL 1: TRIBUNAL DA IGREJA (3 TURNOS SEM EFEITO MANADA) -->
+      <div id="modal-tribunal" class="modal-backdrop hidden">
+        <div class="modal-window tribunal-window">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">FASE 2 — REUNIÃO DE EMERGÊNCIA</span>
+              <h2 id="tribunal-title">Tribunal da Igreja</h2>
+            </div>
+            <div class="tribunal-timer-box">
+              <span id="tribunal-turn-badge">TURNO 1: VOTAÇÃO SECRETA</span>
+              <strong id="tribunal-countdown">45s</strong>
+            </div>
+          </div>
+
+          <p id="tribunal-reason" class="modal-lead"></p>
+
+          <div class="tribunal-clues-panel">
+            <h3>Relatório Automático de Pistas (Últimos 15 segundos próximos ao local)</h3>
+            <p id="tribunal-clues-list">Analisando rastros no vilarejo...</p>
+          </div>
+
+          <div id="tribunal-turn1-container">
+            <p class="section-hint">
+              Os votos são secretos para impedir efeito manada. Os 2 jogadores mais votados irão ao altar para defesa.
+            </p>
+            <div id="tribunal-suspects-grid" class="suspects-grid"></div>
+          </div>
+
+          <div id="tribunal-finalists-container" class="hidden">
+            <div id="tribunal-finalists-cards" class="finalists-row"></div>
+            <div id="tribunal-verdict-actions" class="verdict-actions hidden">
+              <button id="btn-verdict-a" class="btn-primary">Executar Acusado A (Tiro de Prata)</button>
+              <button id="btn-verdict-b" class="btn-primary">Executar Acusado B (Tiro de Prata)</button>
+              <button id="btn-verdict-absolve" class="btn-secondary">Absolver Ambos</button>
+            </div>
+            <p class="section-hint">
+              Atenção: Se você votar para executar um inocente, perderá sua habilidade ativa até refazer sua missão!
+            </p>
+          </div>
+
+          <div class="modal-footer">
+            <span id="tribunal-votes-status">Votos registrados: 0</span>
+            <button id="btn-skip-tribunal-turn" class="btn-secondary">
+              Avançar Turno Agora (Teste Rápido)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL 2: ARQUITETURA DAS 20 CLASSES & PROGRESSÃO DE 1 ANO (1.000.000 XP) -->
+      <div id="modal-classes" class="modal-backdrop hidden">
+        <div class="modal-window wide-window">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">SELEÇÃO DE PERSONAGEM (LIMITE DE 1 POR SALA) & CURVA DE 1 ANO</span>
+              <h2>As 20 Classes do Vilarejo (0 a 1.000.000 XP)</h2>
+            </div>
+            <button id="btn-close-classes" class="btn-secondary">Fechar</button>
+          </div>
+          <p class="modal-lead">
+            Cada classe possui traje, chapéu e equipamento próprio. Apenas o Aldeão é ilimitado na sala.
+          </p>
+          <div id="classes-catalog-grid" class="classes-grid"></div>
+        </div>
+      </div>
+
+      <!-- MODAL 3: RODA DA VITÓRIA (SKILL CHECK PÓS-JOGO) -->
+      <div id="modal-victory-wheel" class="modal-backdrop hidden">
+        <div class="modal-window wheel-window">
+          <div class="modal-header">
+            <div>
+              <span id="postgame-winner-eyebrow" class="modal-eyebrow">FIM DE PARTIDA</span>
+              <h2 id="postgame-title">Roda da Vitória — Teste de Reflexo (Skill Check)</h2>
+            </div>
+            <button id="btn-close-wheel" class="btn-secondary">Fechar</button>
+          </div>
+
+          <p id="postgame-reason" class="modal-lead"></p>
+
+          <div class="wheel-stage">
+            <canvas id="victory-wheel-canvas" width="290" height="290"></canvas>
+            <div class="wheel-legend">
+              <div class="legend-item">
+                <span class="dot gold-dot"></span>
+                <span><strong>Zona Dourada (5%):</strong> +1.000 XP</span>
+              </div>
+              <div class="legend-item">
+                <span class="dot good-dot"></span>
+                <span><strong>Zona Boa (25%):</strong> +450 XP</span>
+              </div>
+              <div class="legend-item">
+                <span class="dot miss-dot"></span>
+                <span><strong>Zona Padrão (70%):</strong> +150 XP</span>
+              </div>
+              <div id="wheel-result-banner" class="wheel-result-box">
+                Toque em "Parar Ponteiro (Skill Check)" quando a agulha passar pelo topo dourado!
+              </div>
+              <div class="wheel-actions">
+                <button id="btn-spin-stop" class="btn-primary">Parar Ponteiro (Skill Check)!</button>
+                <button id="btn-new-match-from-wheel" class="btn-secondary">Nova Partida</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CINEMÁTICA DE ABATE ESTILO AMONG US (TELA ESCURECE + FATIADO PELAS GARRAS DO LOBISOMEM) -->
+      <div id="kill-cinematic-overlay" class="kill-overlay hidden">
+        <div class="kill-spotlight-stage">
+          <div class="kill-red-flash"></div>
+
+          <div class="kill-actors-row">
+            <!-- Lobisomem Atacante -->
+            <img id="kill-attacker-img" class="kill-wolf-sprite" alt="Lobisomem" src="" />
+
+            <!-- Vítima sendo fatiada ao meio -->
+            <div class="kill-victim-wrap">
+              <img id="kill-victim-alive-img" class="kill-victim-alive" alt="Vítima" src="" />
+              <img id="kill-victim-corpse-img" class="kill-victim-corpse hidden" alt="Corpo" src="" />
+            </div>
+          </div>
+
+          <!-- Rasgo Triplo Gigante das Garras cortando a tela -->
+          <svg class="kill-claws-svg" viewBox="0 0 400 300">
+            <path class="claw-slash-path slash-1" d="M 40 30 Q 200 140 360 240" />
+            <path class="claw-slash-path slash-2" d="M 20 80 Q 190 180 350 280" />
+            <path class="claw-slash-path slash-3" d="M 70 10 Q 230 110 385 200" />
+          </svg>
+
+          <div class="kill-banner-text">
+            <span class="kill-eyebrow">ATAQUE LETAL NAS SOMBRAS</span>
+            <h2>FATIADO PELAS GARRAS DO LOBISOMEM!</h2>
+            <p>Você agora é um Observador (Fantasma) e pode explorar o vilarejo livremente.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast de Feedback Tático -->
+      <div id="tactical-toast" class="tactical-toast hidden"></div>
+    </div>
+
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>
