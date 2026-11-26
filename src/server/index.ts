@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import { ClassId } from '../shared/types';
+import { BrazilianRoomSummary, ClassId } from '../shared/types';
 import { GameRoom } from './GameRoom';
 
 const app = express();
@@ -17,32 +17,182 @@ const io = new Server(server, {
   }
 });
 
-const MAIN_ROOM_ID = 'vilarejo_principal';
-const mainRoom = new GameRoom(MAIN_ROOM_ID, io);
+// 6 Salas Brasileiras Oficiais (por enquanto apenas servidores do Brasil!)
+const BRAZILIAN_ROOMS_CONFIG = [
+  {
+    id: 'br_sp_mantiqueira',
+    name: 'Sala Brasil #1 — Serra da Mantiqueira',
+    region: 'BR • Sudeste (São Paulo • 12ms)',
+    requiredPlayers: 9,
+    maxPlayers: 12
+  },
+  {
+    id: 'br_mg_ouro_preto',
+    name: 'Sala Brasil #2 — Vila de Ouro Preto',
+    region: 'BR • Sudeste (Minas Gerais • 15ms)',
+    requiredPlayers: 9,
+    maxPlayers: 12
+  },
+  {
+    id: 'br_rs_pampa_noturno',
+    name: 'Sala Brasil #3 — Pampa Noturno',
+    region: 'BR • Sul (Porto Alegre • 19ms)',
+    requiredPlayers: 9,
+    maxPlayers: 12
+  },
+  {
+    id: 'br_ba_chapada_diamantina',
+    name: 'Sala Brasil #4 — Chapada Diamantina',
+    region: 'BR • Nordeste (Salvador • 24ms)',
+    requiredPlayers: 9,
+    maxPlayers: 12
+  },
+  {
+    id: 'br_am_igarape_sombrio',
+    name: 'Sala Brasil #5 — Igarapé Sombrio',
+    region: 'BR • Norte (Manaus • 32ms)',
+    requiredPlayers: 9,
+    maxPlayers: 12
+  },
+  {
+    id: 'br_go_lua_cerrado',
+    name: 'Sala Brasil #6 — Lua do Cerrado',
+    region: 'BR • Centro-Oeste (Goiânia • 18ms)',
+    requiredPlayers: 9,
+    maxPlayers: 12
+  }
+];
+
+const rooms = new Map<string, GameRoom>();
+for (const cfg of BRAZILIAN_ROOMS_CONFIG) {
+  rooms.set(
+    cfg.id,
+    new GameRoom(cfg.id, io, cfg.name, cfg.region, cfg.requiredPlayers, cfg.maxPlayers)
+  );
+}
+
+const DEFAULT_ROOM_ID = BRAZILIAN_ROOMS_CONFIG[0].id;
+const socketToRoom = new Map<string, string>();
+const socketMeta = new Map<string, { name: string; xp: number }>();
+
+function getAllRoomsSummary(): BrazilianRoomSummary[] {
+  return Array.from(rooms.values()).map((r) => r.getRoomSummary());
+}
+
+function getRoomOfSocket(socketId: string): GameRoom {
+  const rid = socketToRoom.get(socketId) || DEFAULT_ROOM_ID;
+  return rooms.get(rid) || rooms.get(DEFAULT_ROOM_ID)!;
+}
 
 io.on('connection', (socket) => {
   const playerName =
     (socket.handshake.query.name as string) || `Morador_${socket.id.slice(0, 4)}`;
   const initialXp = Number(socket.handshake.query.xp) || 15000;
+  const requestedRoomId = (socket.handshake.query.roomId as string) || DEFAULT_ROOM_ID;
+  const targetRoomId = rooms.has(requestedRoomId) ? requestedRoomId : DEFAULT_ROOM_ID;
 
-  mainRoom.addPlayer(socket.id, playerName, false, initialXp);
-  socket.join(MAIN_ROOM_ID);
+  socketMeta.set(socket.id, { name: playerName, xp: initialXp });
+  socketToRoom.set(socket.id, targetRoomId);
 
-  socket.emit('snapshot', mainRoom.getSnapshotForPlayer(socket.id));
+  const initialRoom = rooms.get(targetRoomId)!;
+  initialRoom.addPlayer(socket.id, playerName, false, initialXp);
+  socket.join(targetRoomId);
+
+  socket.emit('rooms_list', getAllRoomsSummary());
+  socket.emit('snapshot', initialRoom.getSnapshotForPlayer(socket.id));
+
+  socket.on('list_rooms', (cb?: (list: BrazilianRoomSummary[]) => void) => {
+    const list = getAllRoomsSummary();
+    socket.emit('rooms_list', list);
+    if (cb) cb(list);
+  });
+
+  socket.on(
+    'join_room',
+    (
+      payload: { roomId: string; playerName?: string },
+      cb?: (res: { ok: boolean; message: string; room?: BrazilianRoomSummary }) => void
+    ) => {
+      const nextRoom = rooms.get(payload?.roomId);
+      if (!nextRoom) {
+        if (cb) cb({ ok: false, message: 'Sala brasileira não encontrada!' });
+        return;
+      }
+
+      const meta = socketMeta.get(socket.id) || { name: playerName, xp: initialXp };
+      if (payload.playerName && payload.playerName.trim()) {
+        meta.name = payload.playerName.trim().slice(0, 22);
+        socketMeta.set(socket.id, meta);
+      }
+
+      const prevRoomId = socketToRoom.get(socket.id);
+      if (prevRoomId && prevRoomId !== nextRoom.roomId) {
+        const prevRoom = rooms.get(prevRoomId);
+        prevRoom?.removePlayer(socket.id);
+        socket.leave(prevRoomId);
+      }
+
+      socketToRoom.set(socket.id, nextRoom.roomId);
+      socket.join(nextRoom.roomId);
+
+      // Remove se já existia e readiciona com o nome atualizado
+      nextRoom.removePlayer(socket.id);
+      nextRoom.addPlayer(socket.id, meta.name, false, meta.xp);
+
+      io.emit('rooms_list', getAllRoomsSummary());
+      socket.emit('snapshot', nextRoom.getSnapshotForPlayer(socket.id));
+
+      if (cb) {
+        cb({
+          ok: true,
+          message: `Você entrou em [${nextRoom.roomName}] (${nextRoom.getRoomSummary().playerCount}/${nextRoom.requiredPlayers} jogadores)!`,
+          room: nextRoom.getRoomSummary()
+        });
+      }
+    }
+  );
+
+  // Simular entrada de +1 jogador brasileiro na sala atual (para acumular até 9/9 e disparar a contagem regressiva!)
+  socket.on('lobby_add_player', (cb?: (res: any) => void) => {
+    const room = getRoomOfSocket(socket.id);
+    const res = room.addSimulatedLobbyPlayer();
+    io.emit('rooms_list', getAllRoomsSummary());
+    if (cb) cb(res);
+  });
+
+  // Simular saída de 1 jogador da sala atual (se o time estava completo 9/9, o contador ZERA na hora!)
+  socket.on('lobby_remove_player', (cb?: (res: any) => void) => {
+    const room = getRoomOfSocket(socket.id);
+    const res = room.removeSimulatedLobbyPlayer();
+    io.emit('rooms_list', getAllRoomsSummary());
+    if (cb) cb(res);
+  });
+
+  // Voltar a sala atual para o Lobby de espera
+  socket.on('return_to_lobby', (cb?: (res: { ok: boolean }) => void) => {
+    const room = getRoomOfSocket(socket.id);
+    room.returnToLobby();
+    io.emit('rooms_list', getAllRoomsSummary());
+    if (cb) cb({ ok: true });
+  });
 
   socket.on('select_class', (classId: ClassId, cb?: (res: { ok: boolean; reason?: string }) => void) => {
-    const res = mainRoom.selectClass(socket.id, classId);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.selectClass(socket.id, classId);
     if (cb) cb(res);
   });
 
   socket.on('start_match', (botCount = 9) => {
-    mainRoom.startMatchWithBots(botCount);
+    const room = getRoomOfSocket(socket.id);
+    room.startMatchWithBots(botCount);
+    io.emit('rooms_list', getAllRoomsSummary());
   });
 
   socket.on(
     'move',
     (payload: { dx: number; dy: number; angle: number; x?: number; y?: number }) => {
-      mainRoom.handleMove(
+      const room = getRoomOfSocket(socket.id);
+      room.handleMove(
         socket.id,
         payload.dx,
         payload.dy,
@@ -54,82 +204,106 @@ io.on('connection', (socket) => {
   );
 
   socket.on('mission_interact', (cb?: (res: { ok: boolean; message: string }) => void) => {
-    const res = mainRoom.handleMissionInteract(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleMissionInteract(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('use_ability', (cb?: (res: { ok: boolean; message: string }) => void) => {
-    const res = mainRoom.handleUseAbility(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleUseAbility(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('werewolf_transform', (cb?: (res: { ok: boolean; message: string }) => void) => {
-    const res = mainRoom.handleWerewolfTransform(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleWerewolfTransform(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('report_or_bell', (cb?: (res: { ok: boolean; message: string }) => void) => {
-    const res = mainRoom.handleReportOrBell(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleReportOrBell(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('toggle_barrel', (cb?: (res: any) => void) => {
-    const res = mainRoom.handleToggleBarrel(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleToggleBarrel(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('toggle_tomb', (cb?: (res: any) => void) => {
-    const res = mainRoom.handleToggleTomb(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleToggleTomb(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('barricade_interact', (cb?: (res: { ok: boolean; message: string }) => void) => {
-    const res = mainRoom.handleBarricadeInteract(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleBarricadeInteract(socket.id);
     if (cb) cb(res);
   });
 
   socket.on('tribunal_vote', (choice: string) => {
-    mainRoom.handleTribunalVote(socket.id, choice);
+    const room = getRoomOfSocket(socket.id);
+    room.handleTribunalVote(socket.id, choice);
   });
 
   socket.on(
     'tribunal_chat',
     (text: string, cb?: (res: { ok: boolean; filtered?: boolean; message?: string }) => void) => {
-      const res = mainRoom.handleTribunalChat(socket.id, text);
+      const room = getRoomOfSocket(socket.id);
+      const res = room.handleTribunalChat(socket.id, text);
       if (cb) cb(res);
     }
   );
 
   socket.on('tribunal_skip_turn', () => {
-    mainRoom.advanceTribunalTurnNow();
+    const room = getRoomOfSocket(socket.id);
+    room.advanceTribunalTurnNow();
   });
 
   socket.on(
     'debug_role',
     (role: 'WEREWOLF' | 'HUNTER_VILLAGER' | 'FORCE_TRIBUNAL' | 'FORCE_BLOOD_MOON') => {
-      mainRoom.debugSetRole(socket.id, role);
+      const room = getRoomOfSocket(socket.id);
+      room.debugSetRole(socket.id, role);
     }
   );
 
   socket.on('spin_victory_wheel', (angleDeg: number, cb?: (res: any) => void) => {
-    const res = mainRoom.handleSpinVictoryWheel(socket.id, angleDeg);
+    const room = getRoomOfSocket(socket.id);
+    const res = room.handleSpinVictoryWheel(socket.id, angleDeg);
     if (cb) cb(res);
   });
 
   socket.on('disconnect', () => {
-    mainRoom.removePlayer(socket.id);
+    const room = getRoomOfSocket(socket.id);
+    room.removePlayer(socket.id);
+    socketToRoom.delete(socket.id);
+    socketMeta.delete(socket.id);
+    io.emit('rooms_list', getAllRoomsSummary());
   });
 });
 
-// Game Loop autoritativo (12.5 ticks/segundo = 80ms com volatile emit para NUNCA acumular fila de pacotes no boot do cliente!)
+// Game Loop autoritativo (12.5 ticks/segundo = 80ms) para todas as Salas Brasileiras!
+let roomsListBroadcastTick = 0;
 setInterval(() => {
-  mainRoom.tick(80);
+  for (const room of rooms.values()) {
+    room.tick(80);
+  }
   for (const [socketId, socket] of io.of('/').sockets) {
-    socket.volatile.emit('snapshot', mainRoom.getSnapshotForPlayer(socketId));
+    const room = getRoomOfSocket(socketId);
+    socket.volatile.emit('snapshot', room.getSnapshotForPlayer(socketId));
+  }
+  roomsListBroadcastTick++;
+  if (roomsListBroadcastTick % 6 === 0) {
+    io.volatile.emit('rooms_list', getAllRoomsSummary());
   }
 }, 80);
 
 const PORT = Number(process.env.PORT) || 3001;
 server.listen(PORT, () => {
-  console.log(`[Eclipse no Vilarejo] Servidor Autoritativo rodando na porta ${PORT}`);
+  console.log(`[Eclipse no Vilarejo] Servidor Autoritativo BR rodando na porta ${PORT} (${rooms.size} salas brasileiras ativas)`);
 });

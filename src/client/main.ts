@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { io } from 'socket.io-client';
-import { WorldSnapshot } from '../shared/types';
+import { BrazilianRoomSummary, WorldSnapshot } from '../shared/types';
 import { UIController } from './uiController';
 import { VillageScene } from './VillageScene';
 
@@ -30,13 +30,11 @@ const game = new Phaser.Game({
   }
 });
 
-let matchBootstrapped = false;
+socket.on('rooms_list', (rooms: BrazilianRoomSummary[]) => {
+  ui.updateRoomsList(rooms);
+});
 
 socket.on('snapshot', (snap: WorldSnapshot) => {
-  if (!matchBootstrapped && snap.phase === 'LOBBY') {
-    matchBootstrapped = true;
-    socket.emit('start_match', 9);
-  }
   villageScene.updateSnapshot(snap);
   ui.updateFromSnapshot(snap);
 });

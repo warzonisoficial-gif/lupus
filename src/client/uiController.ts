@@ -16,18 +16,23 @@ import {
   isPointInZone
 } from '../shared/mapData';
 import { getAccountLevelFromXp } from '../shared/progressionData';
-import { ClassId, PlayerState, WorldSnapshot } from '../shared/types';
+import { BrazilianRoomSummary, ClassId, PlayerState, WorldSnapshot } from '../shared/types';
 import { VillageScene } from './VillageScene';
 
 export class UIController {
   private socket: Socket;
   private scene: VillageScene | null = null;
   private latestSnapshot: WorldSnapshot | null = null;
+  private roomsList: BrazilianRoomSummary[] = [];
+  private lobbyCountdownWasActive: boolean = false;
+  private lobbyResetAlertUntil: number = 0;
+  private lobbyMinimizedManually: boolean = false;
   private selectedTurn1Suspect: string | null = null;
   private lastPortraitClass: string = '';
   private lastKillFeedTopId: string = '';
   private lastTribunalTurnRendered: string = '';
   private lastTribunalChatLastId: string = '';
+  private lastRoomsRenderSignature: string = '';
   private wasLocalPlayerAlive: boolean = true;
 
   private wheelAngleDeg: number = 0;
@@ -272,6 +277,38 @@ export class UIController {
       document.getElementById('modal-classes')?.classList.add('hidden');
     });
 
+    document.getElementById('btn-open-rooms')?.addEventListener('click', () => {
+      this.lobbyMinimizedManually = false;
+      this.socket.emit('list_rooms');
+      document.getElementById('modal-brazil-lobby')?.classList.remove('hidden');
+      this.renderBrazilLobbyModal();
+    });
+
+    document.getElementById('btn-close-lobby-modal')?.addEventListener('click', () => {
+      this.lobbyMinimizedManually = true;
+      document.getElementById('modal-brazil-lobby')?.classList.add('hidden');
+    });
+
+    document.getElementById('btn-lobby-add-player')?.addEventListener('click', () => {
+      this.socket.emit('lobby_add_player', (res: any) => {
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
+    document.getElementById('btn-lobby-remove-player')?.addEventListener('click', () => {
+      this.socket.emit('lobby_remove_player', (res: any) => {
+        if (res?.countdownReset) {
+          this.lobbyResetAlertUntil = Date.now() + 3500;
+        }
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
+    document.getElementById('btn-lobby-fill-instant')?.addEventListener('click', () => {
+      this.socket.emit('start_match', 9);
+      this.showToast('Partida iniciada com 9 jogadores!');
+    });
+
     document.getElementById('btn-skip-tribunal-turn')?.addEventListener('click', () => {
       this.socket.emit('tribunal_skip_turn');
     });
@@ -349,12 +386,168 @@ export class UIController {
     }
     this.updateKillFeed(snap);
     this.updateTribunalModal(snap);
+    this.updateBrazilLobbyState(snap, prevPhase);
 
     if (snap.phase === 'POST_GAME' && prevPhase !== 'POST_GAME') {
       this.openVictoryWheelModal(
         snap.winner || 'VILLAGE',
         snap.winReason || 'A partida chegou ao fim.'
       );
+    }
+  }
+
+  public updateRoomsList(rooms: BrazilianRoomSummary[]) {
+    this.roomsList = rooms;
+    this.renderBrazilLobbyModal();
+  }
+
+  private updateBrazilLobbyState(snap: WorldSnapshot, prevPhase?: string) {
+    const modal = document.getElementById('modal-brazil-lobby');
+    const roomsBtnLabel = document.getElementById('btn-rooms-label');
+    if (roomsBtnLabel) {
+      roomsBtnLabel.textContent =
+        snap.phase === 'LOBBY'
+          ? `Lobby BR (${snap.players.length}/${snap.requiredPlayers})`
+          : `Salas BR (${this.roomsList.length || 6})`;
+    }
+
+    // Detecta se o contador regressivo estava ativo e foi ZERADO porque alguém saiu após o time estar completo!
+    const isCountingDownNow = snap.phase === 'LOBBY' && snap.lobbyCountdownSec !== null;
+    if (
+      snap.phase === 'LOBBY' &&
+      this.lobbyCountdownWasActive &&
+      !isCountingDownNow &&
+      snap.players.length < snap.requiredPlayers
+    ) {
+      this.lobbyResetAlertUntil = Date.now() + 3500;
+      this.showToast(
+        `Um jogador saiu após o time completo! Contador ZERADO (${snap.players.length}/${snap.requiredPlayers}).`
+      );
+    }
+    this.lobbyCountdownWasActive = isCountingDownNow;
+
+    if (snap.phase === 'LOBBY') {
+      if (prevPhase && prevPhase !== 'LOBBY') {
+        this.lobbyMinimizedManually = false;
+      }
+      if (!this.lobbyMinimizedManually) {
+        modal?.classList.remove('hidden');
+      }
+      this.renderBrazilLobbyModal();
+    } else if (prevPhase === 'LOBBY') {
+      modal?.classList.add('hidden');
+    }
+  }
+
+  private renderBrazilLobbyModal() {
+    const snap = this.latestSnapshot;
+    if (!snap) return;
+
+    const currentTitle = document.getElementById('lobby-room-current-title');
+    const accumulator = document.getElementById('lobby-player-accumulator');
+    const pill = document.getElementById('lobby-countdown-pill');
+    const banner = document.getElementById('lobby-status-banner');
+    const rosterBadge = document.getElementById('lobby-roster-badge');
+    const playersListEl = document.getElementById('lobby-players-list');
+    const roomsGridEl = document.getElementById('brazil-rooms-grid');
+
+    if (currentTitle) currentTitle.textContent = `${snap.roomName} (${snap.regionLabel})`;
+    if (accumulator) {
+      accumulator.textContent = `${snap.players.length} / ${snap.requiredPlayers} jogadores necessários (Máx: ${snap.maxPlayers})`;
+    }
+    if (rosterBadge) {
+      rosterBadge.textContent = `${snap.players.length} / ${snap.requiredPlayers}`;
+    }
+
+    const now = Date.now();
+    if (banner && pill) {
+      banner.classList.remove('counting-down', 'reset-alert');
+      if (snap.phase !== 'LOBBY') {
+        pill.textContent = 'Partida em andamento';
+      } else if (snap.lobbyCountdownSec !== null) {
+        banner.classList.add('counting-down');
+        pill.textContent = `Time completo! Iniciando em ${snap.lobbyCountdownSec}s...`;
+      } else if (now < this.lobbyResetAlertUntil) {
+        banner.classList.add('reset-alert');
+        pill.textContent = 'Jogador saiu! CONTADOR ZERADO — Aguardando jogadores...';
+      } else {
+        const missing = Math.max(0, snap.requiredPlayers - snap.players.length);
+        pill.textContent =
+          missing > 0
+            ? `Aguardando mais ${missing} jogador(es) para iniciar...`
+            : 'Preparando início...';
+      }
+    }
+
+    if (playersListEl) {
+      playersListEl.innerHTML = snap.players
+        .map((p) => {
+          const cls = CLASSES_BY_ID[p.classId];
+          const isMe = p.id === this.socket.id;
+          return `
+            <div class="lobby-player-chip">
+              <strong>${this.escapeHtml(p.name)}${isMe ? ' (Você)' : ''}</strong>
+              <span>${this.escapeHtml(cls.name)}</span>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    if (roomsGridEl && this.roomsList.length > 0) {
+      const sig = this.roomsList
+        .map(
+          (r) =>
+            `${r.roomId}_${r.phase}_${r.playerCount}_${r.lobbyCountdownSec ?? 'n'}_${r.roomId === snap.roomId}`
+        )
+        .join('|');
+      if (sig === this.lastRoomsRenderSignature) return;
+      this.lastRoomsRenderSignature = sig;
+
+      roomsGridEl.innerHTML = this.roomsList
+        .map((r) => {
+          const isCurrent = r.roomId === snap.roomId;
+          const statusLabel =
+            r.phase === 'LOBBY'
+              ? r.lobbyCountdownSec !== null
+                ? `Iniciando em ${r.lobbyCountdownSec}s`
+                : `No Lobby (${r.playerCount}/${r.requiredPlayers})`
+              : `Em Jogo (${r.playerCount}/${r.maxPlayers})`;
+          return `
+            <div class="br-room-card ${isCurrent ? 'active-room' : ''}">
+              <div class="br-room-header">
+                <h4>${this.escapeHtml(r.roomName)}</h4>
+              </div>
+              <div class="br-room-region">${this.escapeHtml(r.regionLabel)}</div>
+              <div class="br-room-meta">
+                <span>${this.escapeHtml(statusLabel)}</span>
+                <button
+                  class="${isCurrent ? 'btn-primary' : 'btn-secondary'} btn-sm"
+                  data-join-room="${this.escapeHtml(r.roomId)}"
+                >
+                  ${isCurrent ? 'Sala Atual' : 'Entrar na Sala'}
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+
+      roomsGridEl.querySelectorAll<HTMLButtonElement>('button[data-join-room]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const roomId = btn.getAttribute('data-join-room');
+          if (!roomId) return;
+          const nameInput = document.getElementById('lobby-player-name') as HTMLInputElement | null;
+          const playerName = nameInput?.value.trim() || 'Você (Jogador)';
+          this.socket.emit(
+            'join_room',
+            { roomId, playerName },
+            (res?: { ok: boolean; message: string }) => {
+              if (res?.message) this.showToast(res.message);
+            }
+          );
+        });
+      });
     }
   }
 
@@ -369,6 +562,11 @@ export class UIController {
         phaseBadge.textContent = 'LUA DE SANGUE';
       } else if (snap.phase === 'POST_GAME') {
         phaseBadge.textContent = 'FIM DA CAÇADA';
+      } else if (snap.phase === 'LOBBY') {
+        phaseBadge.textContent =
+          snap.lobbyCountdownSec !== null
+            ? `INICIANDO (${snap.lobbyCountdownSec}s)`
+            : `LOBBY (${snap.players.length}/${snap.requiredPlayers})`;
       } else {
         phaseBadge.textContent = 'VILAREJO';
       }
@@ -454,6 +652,9 @@ export class UIController {
       const maxTurn = turn === 'TURN_1_SECRET_VOTE' ? 45 : turn === 'TURN_2_DEFENSE' ? 20 : 15;
       progress = Math.max(0, Math.min(1, snap.phaseTimerSec / maxTurn));
       ringColor = '#d99b43';
+    } else if (snap.phase === 'LOBBY') {
+      progress = Math.max(0, Math.min(1, snap.players.length / Math.max(1, snap.requiredPlayers)));
+      ringColor = snap.lobbyCountdownSec !== null ? '#52b788' : '#e9c46a';
     }
 
     // 1. Halo externo suave ao redor da Lua

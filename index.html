@@ -75,6 +75,14 @@
         <!-- Direita: Botões de Ação do Topo Alinhados na Mesma Altura -->
         <div class="hud-right-actions">
           <span id="hud-account-xp" class="hud-xp-badge">15.000 XP</span>
+          <button id="btn-open-rooms" class="btn-hud-pill">
+            <svg class="btn-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            <span id="btn-rooms-label">Salas BR (6)</span>
+          </button>
           <button id="btn-open-classes" class="btn-hud-pill">
             <svg class="btn-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -230,6 +238,80 @@
             <span id="mission-btn-label" class="orb-label">MISSÃO</span>
             <span class="orb-hotkey">E</span>
           </button>
+        </div>
+      </div>
+
+      <!-- MODAL 0: LOBBY DE ENTRADA & SALAS BRASILEIRAS (ACÚMULO DE JOGADORES + CONTADOR QUE ZERA SE ALGUÉM SAIR) -->
+      <div id="modal-brazil-lobby" class="modal-backdrop">
+        <div class="modal-window wide-window lobby-window">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">SERVIDORES OFICIAIS DO BRASIL • MATCHMAKING POR SALA</span>
+              <h2>Lobby de Entrada & Salas Brasileiras</h2>
+            </div>
+            <button id="btn-close-lobby-modal" class="btn-secondary">Minimizar</button>
+          </div>
+
+          <div class="lobby-top-bar">
+            <div class="lobby-name-field">
+              <label for="lobby-player-name">Seu Nome no Vilarejo:</label>
+              <input
+                id="lobby-player-name"
+                type="text"
+                maxlength="20"
+                value="Você (Jogador)"
+                placeholder="Digite seu nome..."
+              />
+            </div>
+
+            <div class="lobby-countdown-banner" id="lobby-status-banner">
+              <div class="lobby-status-main">
+                <span id="lobby-room-current-title">Sala Brasil #1 — Serra da Mantiqueira</span>
+                <strong id="lobby-player-accumulator">1 / 9 jogadores necessários</strong>
+              </div>
+              <div id="lobby-countdown-pill" class="lobby-countdown-pill">
+                Aguardando acumular 9 jogadores...
+              </div>
+            </div>
+          </div>
+
+          <div class="lobby-split-grid">
+            <!-- Coluna Esquerda: Lista das 6 Salas Brasileiras -->
+            <div class="lobby-rooms-col">
+              <div class="lobby-section-title">
+                <h3>Escolha uma Sala Brasileira</h3>
+                <span>Mínimo: 9 jogadores • Máximo: 12</span>
+              </div>
+              <div id="brazil-rooms-grid" class="brazil-rooms-grid"></div>
+            </div>
+
+            <!-- Coluna Direita: Jogadores Acumulados na Sala Atual + Simulador de Entrada/Saída -->
+            <div class="lobby-roster-col">
+              <div class="lobby-section-title">
+                <h3>Jogadores na Sala Atual</h3>
+                <span id="lobby-roster-badge">1 / 9</span>
+              </div>
+
+              <div id="lobby-players-list" class="lobby-players-list"></div>
+
+              <div class="lobby-sim-box">
+                <p class="section-hint">
+                  Simule a entrada de jogadores até completar <strong>9/9</strong> (inicia o contador de 5s). Se alguém sair depois do time completo, <strong>o contador zera imediatamente</strong>!
+                </p>
+                <div class="lobby-sim-actions">
+                  <button id="btn-lobby-add-player" class="btn-primary">
+                    + Entrada de Jogador BR
+                  </button>
+                  <button id="btn-lobby-remove-player" class="btn-secondary">
+                    - Saída de Jogador (Zera Contador)
+                  </button>
+                  <button id="btn-lobby-fill-instant" class="btn-secondary">
+                    Lotar e Iniciar Agora (9/9)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

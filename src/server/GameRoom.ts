@@ -29,6 +29,7 @@ import { XP_REWARDS, evaluateVictoryWheelAngle } from '../shared/progressionData
 import { sanitizeTribunalChatMessage } from '../shared/profanityFilter';
 import {
   BarricadeEntity,
+  BrazilianRoomSummary,
   ClassId,
   CorpseEntity,
   GamePhase,
@@ -50,6 +51,13 @@ interface PositionLog {
 
 export class GameRoom {
   public roomId: string;
+  public roomName: string;
+  public regionLabel: string;
+  public requiredPlayers: number = 9;
+  public maxPlayers: number = 12;
+  private lobbyCountdownEndsAt: number | null = null;
+  public readonly lobbyCountdownDurationMs: number = 5000; // 5 segundos de contagem regressiva após completar o time!
+
   private io: Server;
   private phase: GamePhase = 'LOBBY';
   private phaseStartedAt: number = Date.now();
@@ -78,10 +86,68 @@ export class GameRoom {
   private winReason: string | null = null;
   private killFeed: { id: string; text: string; timestamp: number }[] = [];
 
-  constructor(roomId: string, io: Server) {
+  constructor(
+    roomId: string,
+    io: Server,
+    roomName = 'Sala Brasil #1 — Serra da Mantiqueira',
+    regionLabel = 'BR • São Paulo (14ms)',
+    requiredPlayers = 9,
+    maxPlayers = 12
+  ) {
     this.roomId = roomId;
     this.io = io;
+    this.roomName = roomName;
+    this.regionLabel = regionLabel;
+    this.requiredPlayers = requiredPlayers;
+    this.maxPlayers = maxPlayers;
     this.resetMapEntities();
+  }
+
+  public getRoomSummary(): BrazilianRoomSummary {
+    const now = Date.now();
+    const lobbyCountdownSec =
+      this.phase === 'LOBBY' && this.lobbyCountdownEndsAt !== null
+        ? Math.max(0, Math.ceil((this.lobbyCountdownEndsAt - now) / 1000))
+        : null;
+    return {
+      roomId: this.roomId,
+      roomName: this.roomName,
+      regionLabel: this.regionLabel,
+      phase: this.phase,
+      playerCount: this.players.size,
+      requiredPlayers: this.requiredPlayers,
+      maxPlayers: this.maxPlayers,
+      lobbyCountdownSec
+    };
+  }
+
+  /**
+   * Verifica se a sala no LOBBY acumulou o número mínimo necessário de pessoas (requiredPlayers).
+   * - Se atingiu requiredPlayers e o contador ainda não estava rodando -> inicia contagem regressiva de 5s!
+   * - Se alguém SAIU depois de o time estar completo e o total caiu abaixo de requiredPlayers -> O CONTADOR ZERA IMEDIATAMENTE!
+   */
+  public evaluateLobbyReadiness() {
+    if (this.phase !== 'LOBBY') {
+      this.lobbyCountdownEndsAt = null;
+      return;
+    }
+
+    const currentCount = this.players.size;
+    if (currentCount >= this.requiredPlayers) {
+      if (this.lobbyCountdownEndsAt === null) {
+        this.lobbyCountdownEndsAt = Date.now() + this.lobbyCountdownDurationMs;
+        this.addLog(
+          `Time completo (${currentCount}/${this.requiredPlayers})! Iniciando partida em 5 segundos...`
+        );
+      }
+    } else {
+      if (this.lobbyCountdownEndsAt !== null) {
+        this.lobbyCountdownEndsAt = null;
+        this.addLog(
+          `Um jogador saiu e o time ficou incompleto (${currentCount}/${this.requiredPlayers})! Contador regressivo ZERADO!`
+        );
+      }
+    }
   }
 
   private resetMapEntities() {
@@ -157,7 +223,27 @@ export class GameRoom {
       totalXp: initialXp
     };
     this.players.set(id, p);
-    this.addLog(`${name} entrou no vilarejo.`);
+    this.addLog(`${name} entrou na sala (${this.players.size}/${this.requiredPlayers}).`);
+
+    // Se for um bot recém-adicionado no lobby, atribui uma classe especial livre automaticamente
+    if (isBot) {
+      const availableSpecialClasses: ClassId[] = CLASSES_LIST.filter((c) => !c.unlimitedInRoom).map(
+        (c) => c.id
+      );
+      const takenClasses = new Set(Array.from(this.players.values()).map((pl) => pl.classId));
+      if (!takenClasses.has('cacador')) {
+        p.classId = 'cacador';
+      } else {
+        const freeSpecials = availableSpecialClasses.filter((cid) => !takenClasses.has(cid));
+        p.classId =
+          freeSpecials.length > 0
+            ? freeSpecials[Math.floor(Math.random() * freeSpecials.length)]
+            : 'aldeao';
+      }
+      p.abilityCharges = CLASSES_BY_ID[p.classId].maxCharges;
+    }
+
+    this.evaluateLobbyReadiness();
     return p;
   }
 
@@ -165,8 +251,139 @@ export class GameRoom {
     const p = this.players.get(id);
     if (p) {
       this.players.delete(id);
-      this.addLog(`${p.name} deixou a partida.`);
+      this.addLog(`${p.name} saiu da sala (${this.players.size}/${this.requiredPlayers}).`);
+      this.evaluateLobbyReadiness();
     }
+  }
+
+  /**
+   * Simula a entrada de 1 jogador brasileiro no lobby (para acumular jogadores gradualmente até o mínimo necessário)
+   */
+  public addSimulatedLobbyPlayer(): { ok: boolean; message: string; playerCount: number } {
+    if (this.phase !== 'LOBBY') {
+      return { ok: false, message: 'A partida já está em andamento!', playerCount: this.players.size };
+    }
+    if (this.players.size >= this.maxPlayers) {
+      return { ok: false, message: 'A sala atingiu a capacidade máxima (12/12)!', playerCount: this.players.size };
+    }
+
+    const brNames = [
+      'Matheus_SP',
+      'Gabriel_RJ',
+      'Letícia_MG',
+      'Rafael_RS',
+      'Camila_PR',
+      'Lucas_BA',
+      'Amanda_PE',
+      'Thiago_CE',
+      'Beatriz_SC',
+      'Felipe_GO',
+      'Juliana_DF',
+      'Pedro_AM'
+    ];
+    const usedNames = new Set(Array.from(this.players.values()).map((pl) => pl.name));
+    const pickName =
+      brNames.find((n) => !usedNames.has(n)) || `JogadorBR_${this.players.size + 1}`;
+    const botId = `bot_br_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    this.addPlayer(botId, pickName, true, 50000);
+
+    return {
+      ok: true,
+      message: `${pickName} entrou na sala (${this.players.size}/${this.requiredPlayers})!`,
+      playerCount: this.players.size
+    };
+  }
+
+  /**
+   * Simula a saída de 1 jogador do lobby (se o time estava completo, o contador regressivo ZERA na hora!)
+   */
+  public removeSimulatedLobbyPlayer(): {
+    ok: boolean;
+    message: string;
+    playerCount: number;
+    countdownReset: boolean;
+  } {
+    const wasCountingDown = this.lobbyCountdownEndsAt !== null;
+    const removable = Array.from(this.players.values())
+      .reverse()
+      .find((pl) => pl.isBot);
+
+    if (!removable) {
+      return {
+        ok: false,
+        message: 'Não há outros jogadores na sala para remover.',
+        playerCount: this.players.size,
+        countdownReset: false
+      };
+    }
+
+    this.removePlayer(removable.id);
+    const countdownReset = wasCountingDown && this.lobbyCountdownEndsAt === null;
+
+    return {
+      ok: true,
+      message: countdownReset
+        ? `${removable.name} saiu após o time completo! CONTADOR ZERADO (${this.players.size}/${this.requiredPlayers})!`
+        : `${removable.name} saiu da sala (${this.players.size}/${this.requiredPlayers}).`,
+      playerCount: this.players.size,
+      countdownReset
+    };
+  }
+
+  /**
+   * Retorna a sala para o estado de LOBBY mantendo os jogadores humanos conectados
+   */
+  public returnToLobby() {
+    for (const [id, p] of this.players.entries()) {
+      if (p.isBot) this.players.delete(id);
+    }
+    this.phase = 'LOBBY';
+    this.lobbyCountdownEndsAt = null;
+    this.resetMapEntities();
+    this.evaluateLobbyReadiness();
+  }
+
+  /**
+   * Inicia a partida com os jogadores já acumulados na sala (sem precisar recriar bots se já houver >= requiredPlayers)
+   */
+  public launchMatchFromCurrentPlayers() {
+    this.lobbyCountdownEndsAt = null;
+    this.resetMapEntities();
+    this.phase = 'PHASE_1_HUNT';
+    this.phaseStartedAt = Date.now();
+    this.phaseDurationSec = 360;
+
+    const allPlayers = Array.from(this.players.values());
+    const wolfIndex = Math.floor(Math.random() * allPlayers.length);
+
+    allPlayers.forEach((p, idx) => {
+      const angle = (idx / Math.max(1, allPlayers.length)) * Math.PI * 2;
+      p.isWerewolf = idx === wolfIndex;
+      p.isTransformed = false;
+      p.isAlive = true;
+      p.x = Math.round(CHURCH_CENTER.x + Math.cos(angle) * 210);
+      p.y = Math.round(CHURCH_CENTER.y + Math.sin(angle) * 210);
+      p.missionProgress = 0;
+      p.isPerformingMission = false;
+      p.abilityUnlocked = false;
+      p.abilityCharges = CLASSES_BY_ID[p.classId].maxCharges;
+      p.hasBlessingShield = false;
+      p.totemsDestroyed = 0;
+      p.hasEscapePassive = false;
+      p.isStunnedEnd = 0;
+      p.isInvisibleEnd = 0;
+      p.guiltSlowEnd = 0;
+      p.hiddenInBarrelId = null;
+      p.usedBarrelIds = [];
+      p.hiddenInTombId = null;
+      p.removingBarricadeId = null;
+      p.removingBarricadeEndsAt = 0;
+      p.barricadeCooldownEnd = 0;
+    });
+
+    this.addLog(
+      `Partida iniciada em [${this.roomName}] com ${allPlayers.length} jogadores! Façam suas missões!`
+    );
   }
 
   /**
@@ -1793,6 +2010,14 @@ export class GameRoom {
   public tick(deltaMs: number) {
     const now = Date.now();
 
+    if (this.phase === 'LOBBY') {
+      this.evaluateLobbyReadiness();
+      if (this.lobbyCountdownEndsAt !== null && now >= this.lobbyCountdownEndsAt) {
+        this.launchMatchFromCurrentPlayers();
+      }
+      return;
+    }
+
     if (this.phase === 'PHASE_1_HUNT') {
       const elapsedPhaseSec = (now - this.phaseStartedAt) / 1000;
       if (elapsedPhaseSec >= this.phaseDurationSec) {
@@ -2234,8 +2459,18 @@ export class GameRoom {
       return !viewer.isWerewolf || t.ownerId === viewerId;
     });
 
+    const lobbyCountdownSec =
+      this.phase === 'LOBBY' && this.lobbyCountdownEndsAt !== null
+        ? Math.max(0, Math.ceil((this.lobbyCountdownEndsAt - now) / 1000))
+        : null;
+
     return {
       roomId: this.roomId,
+      roomName: this.roomName,
+      regionLabel: this.regionLabel,
+      requiredPlayers: this.requiredPlayers,
+      maxPlayers: this.maxPlayers,
+      lobbyCountdownSec,
       phase: this.phase,
       phaseTimerSec:
         this.phase === 'PHASE_2_TRIBUNAL' && this.tribunal

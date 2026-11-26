@@ -203,8 +203,24 @@ export interface TribunalState {
   chatMessages: TribunalChatMessage[];
 }
 
+export interface BrazilianRoomSummary {
+  roomId: string;
+  roomName: string;
+  regionLabel: string;
+  phase: GamePhase;
+  playerCount: number;
+  requiredPlayers: number;
+  maxPlayers: number;
+  lobbyCountdownSec: number | null;
+}
+
 export interface WorldSnapshot {
   roomId: string;
+  roomName: string;
+  regionLabel: string;
+  requiredPlayers: number;
+  maxPlayers: number;
+  lobbyCountdownSec: number | null; // Contador regressivo (ex: 5s..1s) quando a sala atinge o número necessário; zera se alguém sair!
   phase: GamePhase;
   phaseTimerSec: number;
   eclipseActive: boolean;
