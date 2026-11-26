@@ -1,4 +1,4 @@
-import { Server } from 'socket.io';
+import type { Server } from 'socket.io';
 import { CLASSES_BY_ID, CLASSES_LIST } from '../shared/classesData';
 import {
   BARRICADE_INTERACT_RADIUS,
@@ -63,7 +63,7 @@ export class GameRoom {
   private lobbyCountdownEndsAt: number | null = null;
   public readonly lobbyCountdownDurationMs: number = 5000; // 5 segundos de contagem regressiva após completar o time!
 
-  private io: Server;
+  private io?: Server;
   private phase: GamePhase = 'LOBBY';
   private phaseStartedAt: number = Date.now();
   private phaseDurationSec: number = 240;
@@ -96,7 +96,7 @@ export class GameRoom {
 
   constructor(
     roomId: string,
-    io: Server,
+    io?: Server,
     roomName = 'Sala Brasil #1 — Serra da Mantiqueira',
     regionLabel = 'BR • São Paulo (14ms)',
     requiredPlayers = 9,
