@@ -851,6 +851,13 @@ export class GameRoom {
       }
 
       case 'prefeito':
+        if (this.eclipseActive) {
+          p.abilityCharges += 1;
+          return {
+            ok: false,
+            message: 'Durante o Eclipse Lunar, o Sino da Igreja fica fechado e não pode ser tocado!'
+          };
+        }
         this.startTribunal(p.name, 'Decreto do Prefeito (Sino tocado à distância)');
         return { ok: true, message: 'Tribunal da Igreja convocado à distância!' };
 
@@ -1025,9 +1032,15 @@ export class GameRoom {
       return { ok: true, message: 'Corpo reportado! Iniciando Tribunal da Igreja.' };
     }
 
-    // 2. Verificar proximidade do Sino da Igreja
+    // 2. Verificar proximidade do Sino da Igreja (Durante o Eclipse Lunar, o Sino fica fechado!)
     const distToBell = Math.hypot(p.x - CHURCH_CENTER.x, p.y - CHURCH_CENTER.y);
     if (distToBell <= BELL_INTERACT_RADIUS + 30) {
+      if (this.eclipseActive) {
+        return {
+          ok: false,
+          message: 'O Sino da Igreja está fechado durante o Eclipse Lunar! Aguarde a Lua Clara.'
+        };
+      }
       this.startTribunal(p.name, `${p.name} tocou o Sino da Igreja!`);
       return { ok: true, message: 'Sino da Igreja badalado!' };
     }

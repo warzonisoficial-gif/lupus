@@ -710,12 +710,13 @@ export class UIController {
       btnMission?.classList.add('hidden');
     }
 
-    // --- BOTÃO 2: REPORTAR CORPO / TOCAR SINO [R] (Só aparece perto de cadáver ou perto do Sino da Igreja!) ---
+    // --- BOTÃO 2: REPORTAR CORPO / TOCAR SINO [R] (Durante o Eclipse Lunar, o Sino da Igreja fica fechado!) ---
     const nearCorpse =
       snap.phase === 'PHASE_1_HUNT' &&
       snap.corpses.some((c) => !c.reported && Math.hypot(c.x - me.x, c.y - me.y) <= 135);
     const nearChurchBell =
       snap.phase === 'PHASE_1_HUNT' &&
+      !snap.eclipseActive &&
       Math.hypot(me.x - CHURCH_CENTER.x, me.y - CHURCH_CENTER.y) <= BELL_INTERACT_RADIUS + 30;
 
     const reportBtnLabel = document.getElementById('report-btn-label');

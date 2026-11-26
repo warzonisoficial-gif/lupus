@@ -73,6 +73,7 @@ export class VillageScene extends Phaser.Scene {
   private overlayGraphics!: Phaser.GameObjects.Graphics;
   private visionVignette!: Phaser.GameObjects.Image;
   private cornfieldChunkSprite!: Phaser.GameObjects.Image;
+  private churchBellSprite!: Phaser.GameObjects.Image;
   private lastCornRustleSpawnAt: number = 0;
 
   private playerNodes: Map<string, PlayerVisualNode> = new Map();
@@ -174,7 +175,7 @@ export class VillageScene extends Phaser.Scene {
 
     // 2. TERRITÓRIO CENTRAL: Praça da Catedral & Sino Sagrado (2100, 1400)
     this.add.image(CHURCH_CENTER.x, CHURCH_CENTER.y - 35, 'building_church_25d').setDepth(6);
-    this.add
+    this.churchBellSprite = this.add
       .image(CHURCH_CENTER.x, CHURCH_CENTER.y + 15, 'prop_bell_25d')
       .setOrigin(0.5, 0.78)
       .setDepth(CHURCH_CENTER.y + 15);
@@ -634,6 +635,29 @@ export class VillageScene extends Phaser.Scene {
           this.overlayGraphics.fillPath();
           this.overlayGraphics.strokePath();
         }
+      }
+    }
+
+    // 1.4. Durante o Eclipse Lunar, o Sino da Igreja fica FECHADO (grade de proteção e tint escuro)
+    if (this.churchBellSprite) {
+      if (this.snapshot.phase === 'PHASE_1_HUNT' && this.snapshot.eclipseActive) {
+        this.churchBellSprite.setTint(0x52525b);
+        this.overlayGraphics.lineStyle(3, 0x991b1b, 0.9);
+        this.overlayGraphics.strokeCircle(CHURCH_CENTER.x, CHURCH_CENTER.y + 4, 42);
+        this.overlayGraphics.lineBetween(
+          CHURCH_CENTER.x - 28,
+          CHURCH_CENTER.y - 24,
+          CHURCH_CENTER.x + 28,
+          CHURCH_CENTER.y + 32
+        );
+        this.overlayGraphics.lineBetween(
+          CHURCH_CENTER.x + 28,
+          CHURCH_CENTER.y - 24,
+          CHURCH_CENTER.x - 28,
+          CHURCH_CENTER.y + 32
+        );
+      } else {
+        this.churchBellSprite.clearTint();
       }
     }
 
