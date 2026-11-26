@@ -4,7 +4,10 @@ import {
   BARRICADE_INTERACT_RADIUS,
   BARREL_INTERACT_RADIUS,
   BELL_INTERACT_RADIUS,
+  BLOOD_MOON_DURATION_SEC,
   CHURCH_CENTER,
+  CLEAR_MOON_DURATION_SEC,
+  ECLIPSE_DURATION_SEC,
   HIDING_BARRELS,
   TOMB_INTERACT_RADIUS,
   VILLAGE_ZONES,
@@ -431,17 +434,20 @@ export class UIController {
 
     if (snap.phase === 'PHASE_1_HUNT') {
       if (snap.eclipseActive) {
-        // Durante o Eclipse (15s): o anel âmbar esvazia enquanto a sombra cobre a lua
-        progress = Math.max(0, Math.min(1, snap.eclipseRemainingSec / 15));
+        // Durante o Eclipse (35s): o anel âmbar esvazia enquanto a sombra cobre a lua
+        progress = Math.max(0, Math.min(1, snap.eclipseRemainingSec / ECLIPSE_DURATION_SEC));
         ringColor = '#d99b43';
       } else {
-        // Durante a Lua Clara (30s): a lua vai carregando até o próximo Eclipse
-        progress = Math.max(0, Math.min(1, (30 - snap.eclipseRemainingSec) / 30));
+        // Durante a Lua Clara (75s): a lua vai carregando até o próximo Eclipse
+        progress = Math.max(
+          0,
+          Math.min(1, (CLEAR_MOON_DURATION_SEC - snap.eclipseRemainingSec) / CLEAR_MOON_DURATION_SEC)
+        );
         ringColor = '#f3e3b2';
       }
     } else if (snap.phase === 'PHASE_3_BLOOD_MOON') {
-      // Lua de Sangue (90s): o anel rubro vai diminuindo conforme o tempo final se esgota
-      progress = Math.max(0, Math.min(1, snap.phaseTimerSec / 90));
+      // Lua de Sangue (140s): o anel rubro vai diminuindo conforme o tempo final se esgota
+      progress = Math.max(0, Math.min(1, snap.phaseTimerSec / BLOOD_MOON_DURATION_SEC));
       ringColor = '#ef4444';
     } else if (snap.phase === 'PHASE_2_TRIBUNAL') {
       const turn = snap.tribunal?.turn || 'TURN_1_SECRET_VOTE';

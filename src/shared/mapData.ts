@@ -13,6 +13,14 @@ export const MAP_HEIGHT = 2800;
 export const CHURCH_CENTER = { x: 2100, y: 1400 };
 export const BELL_INTERACT_RADIUS = 130;
 
+// Duração ampliada dos Turnos das Luas (Lua Clara: 75s | Eclipse Lunar: 35s | Lua de Sangue: 140s)
+export const CLEAR_MOON_DURATION_MS = 75000;
+export const ECLIPSE_DURATION_MS = 35000;
+export const FULL_LUNAR_CYCLE_MS = CLEAR_MOON_DURATION_MS + ECLIPSE_DURATION_MS;
+export const CLEAR_MOON_DURATION_SEC = CLEAR_MOON_DURATION_MS / 1000;
+export const ECLIPSE_DURATION_SEC = ECLIPSE_DURATION_MS / 1000;
+export const BLOOD_MOON_DURATION_SEC = 140;
+
 export const RIVER_LEFT_BANK = 3440;
 export const RIVER_RIGHT_BANK = 3620;
 export const BRIDGE_WALK_TOP = 1280;

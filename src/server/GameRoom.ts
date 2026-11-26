@@ -6,7 +6,10 @@ import {
   BARRICADE_SLOTS,
   BARREL_INTERACT_RADIUS,
   BELL_INTERACT_RADIUS,
+  BLOOD_MOON_DURATION_SEC,
   CHURCH_CENTER,
+  CLEAR_MOON_DURATION_MS,
+  FULL_LUNAR_CYCLE_MS,
   HIDING_BARRELS,
   INITIAL_RUNIC_TOTEMS,
   MAP_HEIGHT,
@@ -247,7 +250,7 @@ export class GameRoom {
     this.resetMapEntities();
     this.phase = 'PHASE_1_HUNT';
     this.phaseStartedAt = Date.now();
-    this.phaseDurationSec = 240;
+    this.phaseDurationSec = 360;
 
     // Sorteia secretamente 1 Lobisomem mantendo o disfarce visual da classe escolhida
     const allPlayers = Array.from(this.players.values());
@@ -1404,12 +1407,12 @@ export class GameRoom {
   }
 
   /**
-   * Fase 3: Caçada Final — Lua de Sangue (Sudden Death de 90 segundos)
+   * Fase 3: Caçada Final — Lua de Sangue (140 segundos)
    */
   public startBloodMoonPhase() {
     this.phase = 'PHASE_3_BLOOD_MOON';
     this.phaseStartedAt = Date.now();
-    this.phaseDurationSec = 90;
+    this.phaseDurationSec = BLOOD_MOON_DURATION_SEC;
     this.tribunal = null;
     this.eclipseActive = false;
     this.siegeRadius = 1450;
@@ -1546,19 +1549,19 @@ export class GameRoom {
     if (this.phase === 'PHASE_1_HUNT') {
       this.updateBarricadesProgress(now);
       this.updateAutomaticMissions(deltaMs, now);
-      // Ciclo do Eclipse Lunar a cada 40s (dura 14s)
+      // Ciclo Lunar Ampliado: 75s de Lua Clara + 35s de Eclipse Lunar (110s no total)
       this.eclipseCycleTimerMs += deltaMs;
-      const cyclePos = this.eclipseCycleTimerMs % 45000;
-      const shouldBeEclipse = cyclePos >= 30000;
+      const cyclePos = this.eclipseCycleTimerMs % FULL_LUNAR_CYCLE_MS;
+      const shouldBeEclipse = cyclePos >= CLEAR_MOON_DURATION_MS;
       if (shouldBeEclipse && !this.eclipseActive) {
         this.eclipseActive = true;
-        this.addLog('ECLIPSE LUNAR! A escuridão consome o vilarejo e silencia as vozes distantes!');
+        this.addLog('ECLIPSE LUNAR (35s)! A escuridão consome o vilarejo e fecha o Sino da Igreja!');
       } else if (!shouldBeEclipse && this.eclipseActive) {
         this.eclipseActive = false;
         for (const p of this.players.values()) {
           if (p.isAlive) p.totalXp += XP_REWARDS.SURVIVE_ECLIPSE;
         }
-        this.addLog('A luz da lua retorna. Sobreviventes receberam +90 XP.');
+        this.addLog('A Lua Clara (75s) retorna. Sobreviventes receberam +90 XP.');
       }
 
       this.updateBotsAI(now);
@@ -1568,17 +1571,17 @@ export class GameRoom {
     } else if (this.phase === 'PHASE_3_BLOOD_MOON') {
       this.updateBarricadesProgress(now);
       const elapsedSec = (now - this.phaseStartedAt) / 1000;
-      const progress = Math.min(1, elapsedSec / 90);
-      // O círculo de cerco fecha gradualmente das bordas (1450px) até o pátio da igreja (270px) em 90s
+      const progress = Math.min(1, elapsedSec / BLOOD_MOON_DURATION_SEC);
+      // O círculo de cerco fecha gradualmente das bordas (1450px) até o pátio da igreja (270px)
       this.siegeRadius = Math.round(1450 - progress * (1450 - 270));
 
       this.updateBotsAI(now);
 
-      if (elapsedSec >= 90) {
+      if (elapsedSec >= BLOOD_MOON_DURATION_SEC) {
         if (this.churchBellHp > 0) {
           this.endMatch(
             'VILLAGE',
-            'A alvorada chegou após 90 segundos e o Sino da Igreja permaneceu intacto! Vitória da Vila!'
+            'A alvorada chegou após a Lua de Sangue e o Sino da Igreja permaneceu intacto! Vitória da Vila!'
           );
         }
       }
@@ -1742,10 +1745,10 @@ export class GameRoom {
     const elapsedSec = Math.floor((now - this.phaseStartedAt) / 1000);
     const phaseTimerSec = Math.max(0, this.phaseDurationSec - elapsedSec);
 
-    const cyclePos = this.eclipseCycleTimerMs % 45000;
+    const cyclePos = this.eclipseCycleTimerMs % FULL_LUNAR_CYCLE_MS;
     const eclipseRemainingSec = this.eclipseActive
-      ? Math.max(0, Math.ceil((45000 - cyclePos) / 1000))
-      : Math.max(0, Math.ceil((30000 - cyclePos) / 1000));
+      ? Math.max(0, Math.ceil((FULL_LUNAR_CYCLE_MS - cyclePos) / 1000))
+      : Math.max(0, Math.ceil((CLEAR_MOON_DURATION_MS - cyclePos) / 1000));
 
     // O servidor autoritativo mascara quem é o Lobisomem caso ele esteja em forma humana!
     const sanitizedPlayers: PlayerState[] = Array.from(this.players.values()).map((p) => {
