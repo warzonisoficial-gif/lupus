@@ -233,21 +233,17 @@ export class GameRoom {
     this.players.set(id, p);
     this.addLog(`${name} entrou na sala (${this.players.size}/${this.requiredPlayers}).`);
 
-    // Se for um bot recém-adicionado no lobby, atribui uma classe especial livre automaticamente
+    // Se for um bot recém-adicionado no lobby, escolhe um traje livre aleatório (excluindo Caçador, que é sorteado junto com o Lobo no início da partida!)
     if (isBot) {
-      const availableSpecialClasses: ClassId[] = CLASSES_LIST.filter((c) => !c.unlimitedInRoom).map(
-        (c) => c.id
-      );
+      const availableSpecialClasses: ClassId[] = CLASSES_LIST.filter(
+        (c) => !c.unlimitedInRoom && c.id !== 'cacador'
+      ).map((c) => c.id);
       const takenClasses = new Set(Array.from(this.players.values()).map((pl) => pl.classId));
-      if (!takenClasses.has('cacador')) {
-        p.classId = 'cacador';
-      } else {
-        const freeSpecials = availableSpecialClasses.filter((cid) => !takenClasses.has(cid));
-        p.classId =
-          freeSpecials.length > 0
-            ? freeSpecials[Math.floor(Math.random() * freeSpecials.length)]
-            : 'aldeao';
-      }
+      const freeSpecials = availableSpecialClasses.filter((cid) => !takenClasses.has(cid));
+      p.classId =
+        freeSpecials.length > 0
+          ? freeSpecials[Math.floor(Math.random() * freeSpecials.length)]
+          : 'aldeao';
       p.abilityCharges = CLASSES_BY_ID[p.classId].maxCharges;
     }
 
@@ -352,7 +348,8 @@ export class GameRoom {
   }
 
   /**
-   * Inicia a partida com os jogadores já acumulados na sala (sem precisar recriar bots se já houver >= requiredPlayers)
+   * Inicia a partida com os jogadores já acumulados na sala:
+   * - O LOBISOMEM e o CAÇADOR são sorteados 100% ALEATORIAMENTE entre todos os jogadores da sala no início da partida!
    */
   public launchMatchFromCurrentPlayers() {
     this.lobbyCountdownEndsAt = null;
@@ -364,9 +361,26 @@ export class GameRoom {
     const allPlayers = Array.from(this.players.values());
     const wolfIndex = Math.floor(Math.random() * allPlayers.length);
 
+    // Se alguém tinha equipado 'cacador' antes, volta para 'aldeao' para que o Caçador seja sorteado aleatoriamente entre os inocentes!
+    for (const pl of allPlayers) {
+      if (pl.classId === 'cacador') {
+        pl.classId = 'aldeao';
+      }
+    }
+
+    // Sorteia 1 Caçador aleatório entre todos os jogadores que NÃO foram sorteados como Lobisomem!
+    const nonWolfIndices = allPlayers.map((_, idx) => idx).filter((idx) => idx !== wolfIndex);
+    const hunterIndex =
+      nonWolfIndices.length > 0
+        ? nonWolfIndices[Math.floor(Math.random() * nonWolfIndices.length)]
+        : -1;
+
     allPlayers.forEach((p, idx) => {
       const angle = (idx / Math.max(1, allPlayers.length)) * Math.PI * 2;
       p.isWerewolf = idx === wolfIndex;
+      if (idx === hunterIndex) {
+        p.classId = 'cacador';
+      }
       p.isTransformed = false;
       p.isAlive = true;
       p.x = Math.round(CHURCH_CENTER.x + Math.cos(angle) * 210);
@@ -389,18 +403,35 @@ export class GameRoom {
       p.barricadeCooldownEnd = 0;
     });
 
+    const hunterPlayer = hunterIndex >= 0 ? allPlayers[hunterIndex] : null;
     this.addLog(
-      `Partida iniciada em [${this.roomName}] com ${allPlayers.length} jogadores! Façam suas missões!`
+      `Partida iniciada em [${this.roomName}]! O Lobisomem (secreto) e o Caçador (${hunterPlayer?.name || 'Sorteado'}) foram sorteados aleatoriamente!`
     );
   }
 
   /**
-   * Regra de Seleção: Máximo de 1 exemplar de cada classe especial por sala.
-   * Apenas o Aldeão é ilimitado.
+   * Regra de Seleção no Lobby:
+   * - Só é permitido trocar de personagem no LOBBY (antes da partida iniciar).
+   * - O Lobisomem e o Caçador são sorteados aleatoriamente quando a partida começa!
+   * - Máximo de 1 exemplar de cada classe especial por sala (apenas o Aldeão é ilimitado).
    */
   public selectClass(playerId: string, requestedClass: ClassId): { ok: boolean; reason?: string } {
+    if (this.phase !== 'LOBBY') {
+      return {
+        ok: false,
+        reason: 'Você só pode trocar de personagem na sala de espera (Lobby) antes da partida começar!'
+      };
+    }
+
     const player = this.players.get(playerId);
     if (!player) return { ok: false, reason: 'Jogador não encontrado.' };
+
+    if (requestedClass === 'cacador') {
+      return {
+        ok: false,
+        reason: 'O Caçador e o Lobisomem são sorteados aleatoriamente quando a partida começa!'
+      };
+    }
 
     const cls = CLASSES_BY_ID[requestedClass];
     if (!cls) return { ok: false, reason: 'Classe inválida.' };
@@ -417,7 +448,7 @@ export class GameRoom {
         if (other.id !== playerId && other.classId === requestedClass) {
           return {
             ok: false,
-            reason: `A classe ${cls.name} já foi travada por ${other.name} nesta sala!`
+            reason: `A classe ${cls.name} já foi escolhida por ${other.name} nesta sala!`
           };
         }
       }
@@ -425,12 +456,12 @@ export class GameRoom {
 
     player.classId = requestedClass;
     player.abilityCharges = cls.maxCharges;
-    this.addLog(`${player.name} selecionou a classe ${cls.name}.`);
+    this.addLog(`${player.name} equipou o personagem ${cls.name}.`);
     return { ok: true };
   }
 
   /**
-   * Preenche a sala com bots até atingir entre 8 e 12 jogadores e inicia a partida
+   * Preenche a sala com bots até atingir o total necessário e inicia a partida sorteando Lobo e Caçador aleatoriamente!
    */
   public startMatchWithBots(targetCount = 9) {
     // Limpa bots anteriores se estiver reiniciando
@@ -439,78 +470,29 @@ export class GameRoom {
     }
 
     const botNames = [
-      'Alaric (Bot)',
-      'Beatriz (Bot)',
-      'Corvus (Bot)',
-      'Dante (Bot)',
-      'Elena (Bot)',
-      'Fausto (Bot)',
-      'Gideon (Bot)',
-      'Helena (Bot)',
-      'Igor (Bot)',
-      'Julian (Bot)'
+      'Matheus_SP',
+      'Gabriel_RJ',
+      'Letícia_MG',
+      'Rafael_RS',
+      'Camila_PR',
+      'Lucas_BA',
+      'Amanda_PE',
+      'Thiago_CE',
+      'Beatriz_SC',
+      'Felipe_GO',
+      'Juliana_DF'
     ];
 
-    const availableSpecialClasses: ClassId[] = CLASSES_LIST.filter((c) => !c.unlimitedInRoom).map(
-      (c) => c.id
-    );
-
     let botIdx = 0;
-    while (this.players.size < Math.max(8, Math.min(12, targetCount))) {
+    const desiredTotal = Math.max(4, Math.min(12, targetCount));
+    while (this.players.size < desiredTotal) {
       const botId = `bot_${Date.now()}_${botIdx}`;
       const botName = botNames[botIdx % botNames.length];
-      const bot = this.addPlayer(botId, botName, true, 50000);
-
-      const takenClasses = new Set(Array.from(this.players.values()).map((pl) => pl.classId));
-      // Garante presença do Caçador na partida e sorteia as demais classes entre todo o catálogo de 20 classes!
-      if (!takenClasses.has('cacador')) {
-        bot.classId = 'cacador';
-      } else {
-        const freeSpecials = availableSpecialClasses.filter((cid) => !takenClasses.has(cid));
-        bot.classId =
-          freeSpecials.length > 0
-            ? freeSpecials[Math.floor(Math.random() * freeSpecials.length)]
-            : 'aldeao';
-      }
-      bot.abilityCharges = CLASSES_BY_ID[bot.classId].maxCharges;
+      this.addPlayer(botId, botName, true, 50000);
       botIdx++;
     }
 
-    this.resetMapEntities();
-    this.phase = 'PHASE_1_HUNT';
-    this.phaseStartedAt = Date.now();
-    this.phaseDurationSec = 360;
-
-    // Sorteia secretamente 1 Lobisomem mantendo o disfarce visual da classe escolhida
-    const allPlayers = Array.from(this.players.values());
-    const wolfIndex = Math.floor(Math.random() * allPlayers.length);
-
-    allPlayers.forEach((p, idx) => {
-      const angle = (idx / allPlayers.length) * Math.PI * 2;
-      p.isWerewolf = idx === wolfIndex;
-      p.isTransformed = false;
-      p.isAlive = true;
-      p.x = Math.round(CHURCH_CENTER.x + Math.cos(angle) * 210);
-      p.y = Math.round(CHURCH_CENTER.y + Math.sin(angle) * 210);
-      p.missionProgress = 0;
-      p.isPerformingMission = false;
-      p.abilityUnlocked = false;
-      p.abilityCharges = CLASSES_BY_ID[p.classId].maxCharges;
-      p.hasBlessingShield = false;
-      p.totemsDestroyed = 0;
-      p.hasEscapePassive = false;
-      p.isStunnedEnd = 0;
-      p.isInvisibleEnd = 0;
-      p.guiltSlowEnd = 0;
-      p.hiddenInBarrelId = null;
-      p.usedBarrelIds = [];
-      p.hiddenInTombId = null;
-      p.removingBarricadeId = null;
-      p.removingBarricadeEndsAt = 0;
-      p.barricadeCooldownEnd = 0;
-    });
-
-    this.addLog('A noite caiu! Façam suas missões distantes para liberar suas habilidades.');
+    this.launchMatchFromCurrentPlayers();
   }
 
   /**
@@ -553,7 +535,14 @@ export class GameRoom {
     clientX?: number,
     clientY?: number
   ) {
-    if (this.phase !== 'PHASE_1_HUNT' && this.phase !== 'PHASE_3_BLOOD_MOON') return;
+    // Permite movimentar o boneco livremente também durante a fase de espera na sala (LOBBY), estilo Among Us!
+    if (
+      this.phase !== 'LOBBY' &&
+      this.phase !== 'PHASE_1_HUNT' &&
+      this.phase !== 'PHASE_3_BLOOD_MOON'
+    ) {
+      return;
+    }
 
     const p = this.players.get(playerId);
     if (!p) return;
@@ -2020,6 +2009,7 @@ export class GameRoom {
 
     if (this.phase === 'LOBBY') {
       this.evaluateLobbyReadiness();
+      this.updateLobbyBotsPatrol(now);
       if (this.lobbyCountdownEndsAt !== null && now >= this.lobbyCountdownEndsAt) {
         this.launchMatchFromCurrentPlayers();
       }
@@ -2074,6 +2064,27 @@ export class GameRoom {
             'A alvorada chegou após a Lua de Sangue e o Sino da Igreja permaneceu intacto! Vitória da Vila!'
           );
         }
+      }
+    }
+  }
+
+  /**
+   * Enquanto a sala está no LOBBY aguardando jogadores, os bots já presentes caminham pela Praça da Catedral
+   * dando vida à sala de espera estilo Among Us!
+   */
+  private updateLobbyBotsPatrol(now: number) {
+    let idx = 0;
+    for (const bot of this.players.values()) {
+      idx++;
+      if (!bot.isBot) continue;
+      const orbitAngle = ((now / 2600) + idx * 1.45) % (Math.PI * 2);
+      const orbitR = 135 + (idx % 3) * 45;
+      const tx = CHURCH_CENTER.x + Math.cos(orbitAngle) * orbitR;
+      const ty = CHURCH_CENTER.y + Math.sin(orbitAngle) * (orbitR * 0.72);
+      const dist = Math.hypot(tx - bot.x, ty - bot.y);
+      if (dist > 28) {
+        const angle = Math.atan2(ty - bot.y, tx - bot.x);
+        this.handleMove(bot.id, Math.cos(angle) * 0.55, Math.sin(angle) * 0.55, angle);
       }
     }
   }

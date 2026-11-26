@@ -9,6 +9,8 @@ import {
   CLEAR_MOON_DURATION_SEC,
   ECLIPSE_DURATION_SEC,
   HIDING_BARRELS,
+  LOBBY_WARDROBE_INTERACT_RADIUS,
+  LOBBY_WARDROBE_POS,
   TOMB_INTERACT_RADIUS,
   VILLAGE_ZONES,
   WEREWOLF_TOMBS,
@@ -223,6 +225,38 @@ export class UIController {
       });
     });
 
+    document.getElementById('btn-action-wardrobe')?.addEventListener('click', () => {
+      this.renderClassesCatalog();
+      document.getElementById('modal-classes')?.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-inworld-wardrobe')?.addEventListener('click', () => {
+      this.renderClassesCatalog();
+      document.getElementById('modal-classes')?.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-inworld-add-player')?.addEventListener('click', () => {
+      this.socket.emit('lobby_add_player', (res: any) => {
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
+    document.getElementById('btn-inworld-remove-player')?.addEventListener('click', () => {
+      this.socket.emit('lobby_remove_player', (res: any) => {
+        if (res?.countdownReset) {
+          this.lobbyResetAlertUntil = Date.now() + 3500;
+        }
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
+    document.getElementById('btn-inworld-change-room')?.addEventListener('click', () => {
+      this.lobbyMinimizedManually = false;
+      this.socket.emit('list_rooms');
+      document.getElementById('modal-brazil-lobby')?.classList.remove('hidden');
+      this.renderBrazilLobbyModal();
+    });
+
     document.getElementById('btn-toggle-drawer')?.addEventListener('click', () => {
       document.getElementById('tactical-drawer')?.classList.toggle('hidden');
     });
@@ -333,8 +367,11 @@ export class UIController {
         'create_room',
         { roomName, regionLabel, requiredPlayers, playerName },
         (res?: { ok: boolean; message: string }) => {
-          if (res?.ok && roomNameEl) {
-            roomNameEl.value = '';
+          if (res?.ok) {
+            if (roomNameEl) roomNameEl.value = '';
+            // Assim que cria e entra na sala, fecha o modal de salas para o jogador andar com o boneco e escolher personagem!
+            this.lobbyMinimizedManually = true;
+            document.getElementById('modal-brazil-lobby')?.classList.add('hidden');
           }
           if (res?.message) {
             this.showToast(res.message);
@@ -437,11 +474,12 @@ export class UIController {
 
   private updateBrazilLobbyState(snap: WorldSnapshot, prevPhase?: string) {
     const modal = document.getElementById('modal-brazil-lobby');
+    const inWorldHud = document.getElementById('in-world-lobby-hud');
     const roomsBtnLabel = document.getElementById('btn-rooms-label');
     if (roomsBtnLabel) {
       roomsBtnLabel.textContent =
         snap.phase === 'LOBBY'
-          ? `Lobby BR (${snap.players.length}/${snap.requiredPlayers})`
+          ? `Salas (${snap.players.length}/${snap.requiredPlayers})`
           : `Salas BR (${this.roomsList.length || 6})`;
     }
 
@@ -461,15 +499,49 @@ export class UIController {
     this.lobbyCountdownWasActive = isCountingDownNow;
 
     if (snap.phase === 'LOBBY') {
-      if (prevPhase && prevPhase !== 'LOBBY') {
-        this.lobbyMinimizedManually = false;
-      }
       if (!this.lobbyMinimizedManually) {
         modal?.classList.remove('hidden');
+        inWorldHud?.classList.add('hidden');
+      } else {
+        modal?.classList.add('hidden');
+        inWorldHud?.classList.remove('hidden');
       }
+      this.renderInWorldLobbyHud(snap);
       this.renderBrazilLobbyModal();
-    } else if (prevPhase === 'LOBBY') {
+    } else {
       modal?.classList.add('hidden');
+      inWorldHud?.classList.add('hidden');
+    }
+  }
+
+  private renderInWorldLobbyHud(snap: WorldSnapshot) {
+    const titleEl = document.getElementById('in-world-room-title');
+    const countEl = document.getElementById('in-world-room-count');
+    const statusEl = document.getElementById('in-world-lobby-status');
+    const hudBox = document.getElementById('in-world-lobby-hud');
+
+    if (titleEl) titleEl.textContent = `${snap.roomName} (${snap.regionLabel})`;
+    if (countEl) {
+      countEl.textContent = `${snap.players.length} / ${snap.requiredPlayers} Jogadores`;
+    }
+
+    const now = Date.now();
+    if (statusEl && hudBox) {
+      hudBox.classList.remove('inworld-counting', 'inworld-reset');
+      if (snap.lobbyCountdownSec !== null) {
+        hudBox.classList.add('inworld-counting');
+        statusEl.textContent = `TIME COMPLETO! Partida iniciando em ${snap.lobbyCountdownSec}s (O Lobo e o Caçador serão sorteados!)`;
+      } else if (now < this.lobbyResetAlertUntil) {
+        hudBox.classList.add('inworld-reset');
+        statusEl.textContent =
+          'JOGADOR SAIU APÓS TIME COMPLETO! Contador zerado — aguardando jogadores...';
+      } else {
+        const missing = Math.max(0, snap.requiredPlayers - snap.players.length);
+        statusEl.textContent =
+          missing > 0
+            ? `Aguardando mais ${missing} jogador(es)... Ande com seu boneco ou vá ao Armário [E] escolher seu personagem!`
+            : 'Preparando sorteio do Lobisomem e do Caçador...';
+      }
     }
   }
 
@@ -582,6 +654,11 @@ export class UIController {
             'join_room',
             { roomId, playerName },
             (res?: { ok: boolean; message: string }) => {
+              if (res?.ok) {
+                // Fecha o menu de salas na hora que entra na sala para o jogador caminhar com seu boneco e escolher personagem!
+                this.lobbyMinimizedManually = true;
+                document.getElementById('modal-brazil-lobby')?.classList.add('hidden');
+              }
               if (res?.message) this.showToast(res.message);
             }
           );
@@ -859,6 +936,30 @@ export class UIController {
     const btnBarrel = document.getElementById('btn-action-barrel');
     const btnTomb = document.getElementById('btn-action-tomb');
     const btnBarricade = document.getElementById('btn-action-barricade');
+    const btnWardrobe = document.getElementById('btn-action-wardrobe');
+
+    if (snap.phase === 'LOBBY') {
+      btnMission?.classList.add('hidden');
+      btnAbility?.classList.add('hidden');
+      btnReport?.classList.add('hidden');
+      btnTransform?.classList.add('hidden');
+      btnBarrel?.classList.add('hidden');
+      btnTomb?.classList.add('hidden');
+      btnBarricade?.classList.add('hidden');
+
+      const distToWardrobe = Math.hypot(
+        LOBBY_WARDROBE_POS.x - me.x,
+        LOBBY_WARDROBE_POS.y - me.y
+      );
+      if (distToWardrobe <= LOBBY_WARDROBE_INTERACT_RADIUS + 30) {
+        btnWardrobe?.classList.remove('hidden');
+      } else {
+        btnWardrobe?.classList.add('hidden');
+      }
+      return;
+    }
+
+    btnWardrobe?.classList.add('hidden');
 
     if (
       !me.isAlive ||
@@ -1218,11 +1319,13 @@ export class UIController {
 
     const me = this.latestSnapshot?.players.find((p) => p.id === this.socket.id);
     const myXp = me?.totalXp ?? 15000;
+    const isLobbyPhase = this.latestSnapshot?.phase === 'LOBBY';
 
     grid.innerHTML = CLASSES_LIST.map((cls) => {
       const holderName = !cls.unlimitedInRoom ? takenByOther.get(cls.id) : undefined;
       const isMyClass = me?.classId === cls.id;
-      const isLockedByXp = myXp < cls.requiredXp;
+      const isRandomAssignedOnly = cls.id === 'cacador';
+      const isLockedByXp = !isRandomAssignedOnly && myXp < cls.requiredXp;
       const portraitUrl = this.getCharacterPortraitDataUrl(cls.id);
 
       return `
@@ -1236,7 +1339,11 @@ export class UIController {
             <div style="flex: 1; min-width: 0;">
               <div class="class-item-header">
                 <h4>${cls.order}. ${cls.name}</h4>
-                <span class="class-xp-req ${isLockedByXp ? 'xp-req-locked' : ''}">Nv.${cls.requiredLevel} (${cls.requiredXp.toLocaleString('pt-BR')} XP)</span>
+                <span class="class-xp-req ${isLockedByXp ? 'xp-req-locked' : ''}">${
+                  isRandomAssignedOnly
+                    ? 'Sorteado na Partida'
+                    : `Nv.${cls.requiredLevel} (${cls.requiredXp.toLocaleString('pt-BR')} XP)`
+                }</span>
               </div>
               <div class="class-meta-line"><strong>Missão (${(cls.missionDurationMs / 1000).toFixed(1)}s):</strong> ${cls.missionTitle}</div>
               <div class="class-meta-line"><strong>${cls.abilityName}:</strong> ${cls.abilityDescription}</div>
@@ -1245,18 +1352,22 @@ export class UIController {
           <button
             class="${isMyClass ? 'btn-primary' : 'btn-secondary'}"
             data-select-class="${cls.id}"
-            ${holderName || isLockedByXp ? 'disabled' : ''}
+            ${holderName || isLockedByXp || isRandomAssignedOnly || !isLobbyPhase ? 'disabled' : ''}
           >
             ${
               isMyClass
-                ? 'Classe Equipada'
-                : isLockedByXp
-                  ? `Bloqueada — Requer Nv.${cls.requiredLevel}`
-                  : holderName
-                    ? `Travada por ${holderName}`
-                    : cls.unlimitedInRoom
-                      ? 'Selecionar (Ilimitado)'
-                      : 'Selecionar (1 Vaga na Sala)'
+                ? 'Personagem Equipado'
+                : isRandomAssignedOnly
+                  ? 'Sorteado Aleatoriamente no Início'
+                  : !isLobbyPhase
+                    ? 'Troca Apenas na Sala de Espera'
+                    : isLockedByXp
+                      ? `Bloqueado — Requer Nv.${cls.requiredLevel}`
+                      : holderName
+                        ? `Escolhido por ${holderName}`
+                        : cls.unlimitedInRoom
+                          ? 'Equipar Personagem (Ilimitado)'
+                          : 'Equipar Personagem (1 na Sala)'
             }
           </button>
         </div>

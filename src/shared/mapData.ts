@@ -13,6 +13,10 @@ export const MAP_HEIGHT = 2800;
 export const CHURCH_CENTER = { x: 2100, y: 1400 };
 export const BELL_INTERACT_RADIUS = 130;
 
+// Armário / Baú de Trajes da Praça da Catedral (para trocar de personagem caminhando no Lobby, estilo Among Us!)
+export const LOBBY_WARDROBE_POS = { x: 1940, y: 1385 };
+export const LOBBY_WARDROBE_INTERACT_RADIUS = 115;
+
 // Duração ampliada dos Turnos das Luas (Lua Clara: 75s | Eclipse Lunar: 35s | Lua de Sangue: 140s)
 export const CLEAR_MOON_DURATION_MS = 75000;
 export const ECLIPSE_DURATION_MS = 35000;

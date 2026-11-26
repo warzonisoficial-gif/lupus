@@ -8,6 +8,8 @@ import {
   CHURCH_CENTER,
   GIANT_ANCIENT_TREE,
   HIDING_BARRELS,
+  LOBBY_WARDROBE_INTERACT_RADIUS,
+  LOBBY_WARDROBE_POS,
   MAP_HEIGHT,
   MAP_WIDTH,
   SHALLOW_LAKE_ZONE,
@@ -181,6 +183,23 @@ export class VillageScene extends Phaser.Scene {
       .image(CHURCH_CENTER.x, CHURCH_CENTER.y + 15, 'prop_bell_25d')
       .setOrigin(0.5, 0.78)
       .setDepth(CHURCH_CENTER.y + 15);
+
+    // Armário / Baú de Trajes da Praça da Catedral (Estilo Among Us: caminhe até ele no Lobby e aperte [E] ou o botão TRAJES para escolher seu personagem!)
+    this.add
+      .image(LOBBY_WARDROBE_POS.x, LOBBY_WARDROBE_POS.y, 'prop_wardrobe_25d')
+      .setOrigin(0.5, 0.86)
+      .setDepth(LOBBY_WARDROBE_POS.y);
+    this.add
+      .text(LOBBY_WARDROBE_POS.x, LOBBY_WARDROBE_POS.y - 76, 'ARMÁRIO DE PERSONAGENS [E]', {
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        stroke: '#060907',
+        strokeThickness: 4
+      })
+      .setOrigin(0.5)
+      .setDepth(4150);
 
     // Braseiros de Fogo Vivo cercando a Praça da Catedral
     [
@@ -447,6 +466,16 @@ export class VillageScene extends Phaser.Scene {
       if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
+      if (this.snapshot?.phase === 'LOBBY') {
+        const distToWardrobe = Math.hypot(
+          LOBBY_WARDROBE_POS.x - this.predictedX,
+          LOBBY_WARDROBE_POS.y - this.predictedY
+        );
+        if (distToWardrobe <= LOBBY_WARDROBE_INTERACT_RADIUS + 35) {
+          document.getElementById('btn-open-classes')?.click();
+          return;
+        }
+      }
       this.socket.emit('mission_interact', (res: { ok: boolean; message: string }) => {
         if (res?.message) this.onToast(res.message);
       });
@@ -498,7 +527,9 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private handleClientSidePredictedMove(myPlayer: PlayerState, time: number, realDeltaMs: number) {
+    // Permite andar livremente com o boneco também no LOBBY (sala de espera estilo Among Us)!
     if (
+      this.snapshot?.phase !== 'LOBBY' &&
       this.snapshot?.phase !== 'PHASE_1_HUNT' &&
       this.snapshot?.phase !== 'PHASE_3_BLOOD_MOON'
     ) {
@@ -602,7 +633,21 @@ export class VillageScene extends Phaser.Scene {
     this.overlayGraphics.clear();
     const now = Date.now();
 
-    // 1. Seta Guia Tática apontando para o Território da Missão
+    // 1. Seta Guia Tática apontando para o Território da Missão (ou halo dourado no Armário de Personagens durante o LOBBY!)
+    if (myPlayer && myPlayer.isAlive && this.snapshot.phase === 'LOBBY') {
+      const distW = Math.hypot(
+        LOBBY_WARDROBE_POS.x - this.predictedX,
+        LOBBY_WARDROBE_POS.y - this.predictedY
+      );
+      const pulseAlpha = distW <= LOBBY_WARDROBE_INTERACT_RADIUS ? 0.95 : 0.45;
+      this.overlayGraphics.lineStyle(3, 0xd99b26, pulseAlpha);
+      this.overlayGraphics.strokeEllipse(
+        LOBBY_WARDROBE_POS.x,
+        LOBBY_WARDROBE_POS.y - 6,
+        74,
+        32
+      );
+    }
     if (myPlayer && myPlayer.isAlive && this.snapshot.phase === 'PHASE_1_HUNT' && !myPlayer.abilityUnlocked) {
       const cls = CLASSES_BY_ID[myPlayer.classId];
       const targetZone = VILLAGE_ZONES.find((z) => z.id === cls.missionZone);

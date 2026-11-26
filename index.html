@@ -238,18 +238,56 @@
             <span id="mission-btn-label" class="orb-label">MISSÃO</span>
             <span class="orb-hotkey">E</span>
           </button>
+
+          <!-- 5. Armário de Personagens na Sala de Espera (SÓ aparece no LOBBY quando perto do Armário da Praça!) -->
+          <button id="btn-action-wardrobe" class="game-action-orb orb-mission hidden">
+            <span class="orb-ring"></span>
+            <svg class="orb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+            </svg>
+            <span id="wardrobe-btn-label" class="orb-label">PERSONAGEM</span>
+            <span class="orb-hotkey">E</span>
+          </button>
         </div>
       </div>
 
-      <!-- MODAL 0: LOBBY DE ENTRADA & SALAS BRASILEIRAS (ACÚMULO DE JOGADORES + CONTADOR QUE ZERA SE ALGUÉM SAIR) -->
+      <!-- HUD FLUTUANTE DE SALA DE ESPERA ESTILO AMONG US (Aparece no rodapé enquanto você anda com seu boneco pela sala esperando fechar o time!) -->
+      <div id="in-world-lobby-hud" class="in-world-lobby-hud hidden">
+        <div class="in-world-lobby-info">
+          <div class="in-world-room-header">
+            <strong id="in-world-room-title">Sala Brasil #1 — Serra da Mantiqueira</strong>
+            <span id="in-world-room-count" class="in-world-count-badge">1 / 9 Jogadores</span>
+          </div>
+          <p id="in-world-lobby-status" class="in-world-status-line">
+            Ande pela Praça da Vila e vá até o Armário [E] para escolher seu personagem. O Lobo e o Caçador são sorteados no início!
+          </p>
+        </div>
+        <div class="in-world-lobby-actions">
+          <button id="btn-inworld-wardrobe" class="btn-primary btn-sm">
+            Escolher Personagem
+          </button>
+          <button id="btn-inworld-add-player" class="btn-secondary btn-sm">
+            + Jogador BR
+          </button>
+          <button id="btn-inworld-remove-player" class="btn-secondary btn-sm">
+            - Sair 1 (Zera)
+          </button>
+          <button id="btn-inworld-change-room" class="btn-secondary btn-sm">
+            Trocar Sala
+          </button>
+        </div>
+      </div>
+
+      <!-- MODAL 0: TELA DE ENTRADA & ESCOLHA DE SALA (Fecha automaticamente ao entrar na sala para liberar o boneco no mapa!) -->
       <div id="modal-brazil-lobby" class="modal-backdrop">
         <div class="modal-window wide-window lobby-window">
           <div class="modal-header">
             <div>
-              <span class="modal-eyebrow">SERVIDORES OFICIAIS DO BRASIL • MATCHMAKING POR SALA</span>
-              <h2>Lobby de Entrada & Salas Brasileiras</h2>
+              <span class="modal-eyebrow">ECLIPSE NO VILAREJO • SERVIDORES DO BRASIL</span>
+              <h2>Escolha ou Crie uma Sala para Entrar</h2>
             </div>
-            <button id="btn-close-lobby-modal" class="btn-secondary">Minimizar</button>
+            <button id="btn-close-lobby-modal" class="btn-primary">Entrar na Sala Atual</button>
           </div>
 
           <div class="lobby-top-bar">

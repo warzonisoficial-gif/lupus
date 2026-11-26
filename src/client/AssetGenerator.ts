@@ -1002,6 +1002,46 @@ export class AssetGenerator {
       ctx.closePath();
       ctx.fill();
     });
+
+    // 9. Armário / Baú de Trajes da Vila 2.5D (Para escolher o personagem andando no Lobby, estilo Among Us!) (76x86)
+    this.createCanvas(scene, 'prop_wardrobe_25d', 76, 86, (ctx, w, _h) => {
+      const cx = w / 2;
+      // Sombra no chão
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(cx, 76, 30, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Estrutura de carvalho nobre com moldura de bronze
+      ctx.fillStyle = '#3b2313';
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(cx - 26, 14, 52, 60, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Topo entalhado dourado
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.roundRect(cx - 29, 10, 58, 9, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Duas portas de madeira com divisória central e puxadores de ouro
+      ctx.fillStyle = '#5c3419';
+      ctx.fillRect(cx - 22, 22, 20, 46);
+      ctx.strokeRect(cx - 22, 22, 20, 46);
+      ctx.fillRect(cx + 2, 22, 20, 46);
+      ctx.strokeRect(cx + 2, 22, 20, 46);
+
+      // Puxadores dourados
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(cx - 6, 45, 2.8, 0, Math.PI * 2);
+      ctx.arc(cx + 6, 45, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
   /**
