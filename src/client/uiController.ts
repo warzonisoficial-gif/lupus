@@ -322,6 +322,24 @@ export class UIController {
       );
     });
 
+    document.getElementById('btn-test-disconnect-45s')?.addEventListener('click', () => {
+      this.socket.emit('simulate_disconnect_45s', (res?: { ok: boolean; message: string }) => {
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
+    document.getElementById('btn-test-reconnect-now')?.addEventListener('click', () => {
+      this.socket.emit('simulate_reconnect_now', (res?: { ok: boolean; message: string }) => {
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
+    document.getElementById('btn-test-abandon-match')?.addEventListener('click', () => {
+      this.socket.emit('abandon_match', (res?: { ok: boolean; message: string }) => {
+        if (res?.message) this.showToast(res.message);
+      });
+    });
+
     document.getElementById('btn-open-classes')?.addEventListener('click', () => {
       this.renderClassesCatalog();
       document.getElementById('modal-classes')?.classList.remove('hidden');

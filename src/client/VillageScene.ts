@@ -1109,16 +1109,23 @@ export class VillageScene extends Phaser.Scene {
       const stunLabel = now < p.isStunnedEnd ? ' (Atordoado)' : '';
       const guiltLabel = now < (p.guiltSlowEnd || 0) ? ' [Penalizado]' : '';
       const missionTag = p.isPerformingMission ? ` [Missão ${Math.floor(p.missionProgress)}%]` : '';
-      node.nameTag.setText(`${p.name}${stunLabel}${guiltLabel}${missionTag}`);
+      const reconLeftSec =
+        p.isConnected === false && p.reconnectDeadlineMs
+          ? Math.max(0, Math.ceil((p.reconnectDeadlineMs - now) / 1000))
+          : 0;
+      const reconTag = reconLeftSec > 0 ? ` [Reconectando ${reconLeftSec}s]` : '';
+      node.nameTag.setText(`${p.name}${stunLabel}${guiltLabel}${missionTag}${reconTag}`);
       node.nameTag.setPosition(renderX, renderY - topOffset);
       node.nameTag.setColor(
         p.isTransformed
           ? '#ef4444'
-          : p.isPerformingMission
-            ? '#e9c46a'
-            : isSelf
-              ? '#f3d5b5'
-              : '#f2e8d5'
+          : reconLeftSec > 0
+            ? '#fb923c'
+            : p.isPerformingMission
+              ? '#e9c46a'
+              : isSelf
+                ? '#f3d5b5'
+                : '#f2e8d5'
       );
       node.nameTag.setVisible(true);
 

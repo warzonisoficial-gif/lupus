@@ -74,7 +74,7 @@ for (const cfg of BRAZILIAN_ROOMS_CONFIG) {
 
 const DEFAULT_ROOM_ID = BRAZILIAN_ROOMS_CONFIG[0].id;
 const socketToRoom = new Map<string, string>();
-const socketMeta = new Map<string, { name: string; xp: number }>();
+const socketMeta = new Map<string, { name: string; xp: number; token: string }>();
 
 function getAllRoomsSummary(): BrazilianRoomSummary[] {
   return Array.from(rooms.values()).map((r) => r.getRoomSummary());
@@ -89,15 +89,38 @@ io.on('connection', (socket) => {
   const playerName =
     (socket.handshake.query.name as string) || `Morador_${socket.id.slice(0, 4)}`;
   const initialXp = Number(socket.handshake.query.xp) || 15000;
+  const sessionToken =
+    (socket.handshake.query.token as string) || `tok_${socket.id}`;
   const requestedRoomId = (socket.handshake.query.roomId as string) || DEFAULT_ROOM_ID;
-  const targetRoomId = rooms.has(requestedRoomId) ? requestedRoomId : DEFAULT_ROOM_ID;
 
-  socketMeta.set(socket.id, { name: playerName, xp: initialXp });
-  socketToRoom.set(socket.id, targetRoomId);
+  // Verifica se o jogador já estava em alguma sala com janela de reconexão de 45s aberta!
+  let reconnectedRoom: GameRoom | null = null;
+  let reconnectedPlayerId: string | null = null;
+  for (const r of rooms.values()) {
+    const existing = r.findPlayerBySessionToken(sessionToken);
+    if (existing) {
+      reconnectedRoom = r;
+      reconnectedPlayerId = existing.id;
+      break;
+    }
+  }
 
-  const initialRoom = rooms.get(targetRoomId)!;
-  initialRoom.addPlayer(socket.id, playerName, false, initialXp);
-  socket.join(targetRoomId);
+  let initialRoom: GameRoom;
+  if (reconnectedRoom && reconnectedPlayerId) {
+    initialRoom = reconnectedRoom;
+    initialRoom.reconnectPlayerSocket(reconnectedPlayerId, socket.id, sessionToken);
+    socketMeta.set(socket.id, { name: playerName, xp: initialXp, token: sessionToken });
+    socketToRoom.set(socket.id, initialRoom.roomId);
+    socket.join(initialRoom.roomId);
+  } else {
+    const targetRoomId = rooms.has(requestedRoomId) ? requestedRoomId : DEFAULT_ROOM_ID;
+    socketMeta.set(socket.id, { name: playerName, xp: initialXp, token: sessionToken });
+    socketToRoom.set(socket.id, targetRoomId);
+
+    initialRoom = rooms.get(targetRoomId)!;
+    initialRoom.addPlayer(socket.id, playerName, false, initialXp, sessionToken);
+    socket.join(targetRoomId);
+  }
 
   socket.emit('rooms_list', getAllRoomsSummary());
   socket.emit('snapshot', initialRoom.getSnapshotForPlayer(socket.id));
@@ -120,7 +143,11 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const meta = socketMeta.get(socket.id) || { name: playerName, xp: initialXp };
+      const meta = socketMeta.get(socket.id) || {
+        name: playerName,
+        xp: initialXp,
+        token: sessionToken
+      };
       if (payload.playerName && payload.playerName.trim()) {
         meta.name = payload.playerName.trim().slice(0, 22);
         socketMeta.set(socket.id, meta);
@@ -138,7 +165,7 @@ io.on('connection', (socket) => {
 
       // Remove se já existia e readiciona com o nome atualizado
       nextRoom.removePlayer(socket.id);
-      nextRoom.addPlayer(socket.id, meta.name, false, meta.xp);
+      nextRoom.addPlayer(socket.id, meta.name, false, meta.xp, meta.token);
 
       io.emit('rooms_list', getAllRoomsSummary());
       socket.emit('snapshot', nextRoom.getSnapshotForPlayer(socket.id));
@@ -171,7 +198,11 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const meta = socketMeta.get(socket.id) || { name: playerName, xp: initialXp };
+      const meta = socketMeta.get(socket.id) || {
+        name: playerName,
+        xp: initialXp,
+        token: sessionToken
+      };
       if (payload.playerName && payload.playerName.trim()) {
         const cleanPlayerName = sanitizeTribunalChatMessage(payload.playerName.trim()).cleanText.slice(0, 22);
         meta.name = cleanPlayerName || meta.name;
@@ -208,7 +239,7 @@ io.on('connection', (socket) => {
 
       socketToRoom.set(socket.id, customRoomId);
       socket.join(customRoomId);
-      customRoom.addPlayer(socket.id, meta.name, false, meta.xp);
+      customRoom.addPlayer(socket.id, meta.name, false, meta.xp, meta.token);
       customRoom.addLog(
         `Sala brasileira [${finalRoomName}] criada por ${meta.name} (Mínimo: ${reqPlayers} jogadores).`
       );
@@ -362,9 +393,45 @@ io.on('connection', (socket) => {
     if (cb) cb(res);
   });
 
+  // Simular queda de conexão (inicia a janela de 45s com Piloto Automático) ou Reconexão imediata
+  socket.on('simulate_disconnect_45s', (cb?: (res: { ok: boolean; message: string }) => void) => {
+    const room = getRoomOfSocket(socket.id);
+    room.handlePlayerDisconnect(socket.id);
+    if (cb) {
+      cb({
+        ok: true,
+        message: 'Conexão simulada como CAÍDA! Piloto Automático ativo por 45s — clique em Reconectar antes de esgotar!'
+      });
+    }
+  });
+
+  socket.on('simulate_reconnect_now', (cb?: (res: { ok: boolean; message: string }) => void) => {
+    const room = getRoomOfSocket(socket.id);
+    const meta = socketMeta.get(socket.id);
+    room.reconnectPlayerSocket(socket.id, socket.id, meta?.token || `tok_${socket.id}`);
+    if (cb) {
+      cb({
+        ok: true,
+        message: 'Você RECONECTOU dentro dos 45s e retomou o controle do seu personagem!'
+      });
+    }
+  });
+
+  // Abandonar partida voluntariamente (aplica -100 XP e transfere Lobo/Caçador imediatamente!)
+  socket.on('abandon_match', (cb?: (res: { ok: boolean; message: string }) => void) => {
+    const room = getRoomOfSocket(socket.id);
+    room.resolveExpiredReconnectOrAbandon(socket.id, 'Abandono de partida');
+    if (cb) {
+      cb({
+        ok: true,
+        message: 'Partida abandonada (-100 XP). Papéis vitais (Lobo/Caçador) foram transferidos para manter a partida!'
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     const room = getRoomOfSocket(socket.id);
-    room.removePlayer(socket.id);
+    room.handlePlayerDisconnect(socket.id);
     socketToRoom.delete(socket.id);
     socketMeta.delete(socket.id);
     io.emit('rooms_list', getAllRoomsSummary());

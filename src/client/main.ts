@@ -4,10 +4,19 @@ import { BrazilianRoomSummary, WorldSnapshot } from '../shared/types';
 import { UIController } from './uiController';
 import { VillageScene } from './VillageScene';
 
+// Token persistente de sessão no navegador/celular para permitir Reconexão em até 45 segundos se a internet oscilar!
+const STORAGE_TOKEN_KEY = 'eclipse_vilarejo_session_token';
+let sessionToken = window.localStorage.getItem(STORAGE_TOKEN_KEY);
+if (!sessionToken) {
+  sessionToken = `br_tok_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage.setItem(STORAGE_TOKEN_KEY, sessionToken);
+}
+
 const socket = io({
   query: {
     name: 'Você (Jogador)',
-    xp: '15000'
+    xp: '15000',
+    token: sessionToken
   }
 });
 

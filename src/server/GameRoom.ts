@@ -196,19 +196,32 @@ export class GameRoom {
     }
   }
 
-  public addPlayer(id: string, name: string, isBot = false, initialXp = 15000): PlayerState {
+  public addPlayer(
+    id: string,
+    name: string,
+    isBot = false,
+    initialXp = 15000,
+    sessionToken?: string
+  ): PlayerState {
     const angle = Math.random() * Math.PI * 2;
     const dist = 120 + Math.random() * 80;
+    const clampedSpawn = clampToLobbyChurchBounds(
+      Math.round(CHURCH_CENTER.x + Math.cos(angle) * dist),
+      Math.round(CHURCH_CENTER.y + Math.sin(angle) * dist)
+    );
     const p: PlayerState = {
       id,
+      sessionToken,
       name,
       isBot,
+      isConnected: true,
+      reconnectDeadlineMs: null,
       classId: 'aldeao',
       isWerewolf: false,
       isTransformed: false,
       isAlive: true,
-      x: Math.round(CHURCH_CENTER.x + Math.cos(angle) * dist),
-      y: Math.round(CHURCH_CENTER.y + Math.sin(angle) * dist),
+      x: clampedSpawn.x,
+      y: clampedSpawn.y,
       facingAngle: 0,
       missionProgress: 0,
       isPerformingMission: false,
@@ -260,6 +273,200 @@ export class GameRoom {
       this.players.delete(id);
       this.addLog(`${p.name} saiu da sala (${this.players.size}/${this.requiredPlayers}).`);
       this.evaluateLobbyReadiness();
+    }
+  }
+
+  /**
+   * Trata queda de conexão (disconnect) com Janela de Reconexão de 45 Segundos:
+   * - Se a sala estiver no LOBBY: remove da sala normalmente (zerando contador se estava completo).
+   * - Se a partida já começou: o jogador NÃO morre na hora! Tem 45 segundos (reconnectDeadlineMs = now + 45000)
+   *   para reconectar enquanto a IA assume temporariamente o boneco (Autopilot).
+   * - Se o tempo de 45s expirar (ou clicar em Abandonar Partida): aplica penalidade (-100 XP) e transfere
+   *   o papel de Lobisomem ou Caçador para um morador vivo para que a partida nunca trave!
+   */
+  public handlePlayerDisconnect(socketId: string): { keptForReconnect: boolean } {
+    const p = this.players.get(socketId);
+    if (!p) return { keptForReconnect: false };
+
+    if (this.phase === 'LOBBY') {
+      this.removePlayer(socketId);
+      return { keptForReconnect: false };
+    }
+
+    p.isConnected = false;
+    p.reconnectDeadlineMs = Date.now() + 45000; // 45 segundos para reconectar!
+    this.addLog(
+      `${p.name} desconectou! Janela de 45s aberta para reconexão (Piloto Automático ativo).`
+    );
+    return { keptForReconnect: true };
+  }
+
+  /**
+   * Verifica se existe um jogador nesta sala com o mesmo sessionToken (para reconectar em até 45s!)
+   */
+  public findPlayerBySessionToken(token: string): PlayerState | null {
+    if (!token) return null;
+    for (const p of this.players.values()) {
+      if (!p.isBot && p.sessionToken === token) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Reconecta um jogador dentro da janela de 45s trocando o antigo socket.id pelo novo socket.id
+   * e preservando 100% da posição, papel (Lobo/Caçador/Classe), progresso de missão e XP!
+   */
+  public reconnectPlayerSocket(oldSocketId: string, newSocketId: string, token: string): PlayerState | null {
+    const p = this.players.get(oldSocketId);
+    if (!p) return null;
+
+    if (oldSocketId !== newSocketId) {
+      this.players.delete(oldSocketId);
+      p.id = newSocketId;
+      this.players.set(newSocketId, p);
+
+      // Atualiza referências de ID em armadilhas, barricadas e votos do Tribunal
+      for (const t of this.traps) {
+        if (t.ownerId === oldSocketId) t.ownerId = newSocketId;
+      }
+      for (const b of this.barricades) {
+        if (b.removingByPlayerId === oldSocketId) b.removingByPlayerId = newSocketId;
+      }
+      if (this.turn1Votes.has(oldSocketId)) {
+        const v = this.turn1Votes.get(oldSocketId)!;
+        this.turn1Votes.delete(oldSocketId);
+        this.turn1Votes.set(newSocketId, v);
+      }
+      for (const [k, v] of this.turn1Votes.entries()) {
+        if (v === oldSocketId) this.turn1Votes.set(k, newSocketId);
+      }
+      if (this.turn3Votes.has(oldSocketId)) {
+        const v3 = this.turn3Votes.get(oldSocketId)!;
+        this.turn3Votes.delete(oldSocketId);
+        this.turn3Votes.set(newSocketId, v3);
+      }
+      if (this.tribunal?.finalists) {
+        if (this.tribunal.finalists[0] === oldSocketId) this.tribunal.finalists[0] = newSocketId;
+        if (this.tribunal.finalists[1] === oldSocketId) this.tribunal.finalists[1] = newSocketId;
+      }
+    }
+
+    p.sessionToken = token;
+    p.isConnected = true;
+    p.reconnectDeadlineMs = null;
+    this.addLog(`${p.name} reconectou à partida dentro da janela de 45s!`);
+    return p;
+  }
+
+  /**
+   * Processa o abandono definitivo de um jogador (quando os 45s de reconexão expiram OU quando clica em Abandonar):
+   * - Aplica penalidade de deserção (-100 XP).
+   * - Se era o LOBISOMEM: na Fase 1 transfere secretamente a Maldição do Lobo (com os Totens/Escape já conquistados!)
+   *   para um morador vivo (priorizando Aldeão); na Fase 3 (Lua de Sangue), a IA Feral assume até o fim!
+   * - Se era o CAÇADOR: transfere o Rifle e as Armadilhas de Caça restantes para um morador vivo (priorizando Aldeão)!
+   */
+  public resolveExpiredReconnectOrAbandon(playerId: string, reasonLabel = '45s de reconexão esgotados') {
+    const p = this.players.get(playerId);
+    if (!p) return;
+
+    p.isConnected = false;
+    p.reconnectDeadlineMs = null;
+    p.totalXp = Math.max(0, p.totalXp - 100); // Penalidade anti-abandono: -100 XP
+
+    if (this.phase === 'LOBBY') {
+      this.removePlayer(playerId);
+      return;
+    }
+
+    // 1. Se o jogador que caiu/abandonou era o LOBISOMEM:
+    if (p.isWerewolf && p.isAlive) {
+      if (this.phase === 'PHASE_3_BLOOD_MOON') {
+        // Na Fase 3 (Lua de Sangue), todo mundo já vê a fera atacando o Sino -> IA Feral assume até o fim!
+        p.isBot = true;
+        this.addLog(
+          `O Lobisomem (${p.name}) abandonou (${reasonLabel}, -100 XP)! A IA Feral assumiu o controle da fera na Lua de Sangue!`
+        );
+        return;
+      }
+
+      // Na Fase 1 ou Fase 2: transfere secretamente a Maldição do Lobisomem para outro morador vivo!
+      const candidates = Array.from(this.players.values()).filter(
+        (other) => other.id !== p.id && other.isAlive && !other.isWerewolf
+      );
+      const preferred =
+        candidates.find((c) => !c.isBot && c.classId === 'aldeao') ||
+        candidates.find((c) => c.classId === 'aldeao') ||
+        candidates.find((c) => !c.isBot && c.classId !== 'cacador') ||
+        candidates.find((c) => c.classId !== 'cacador') ||
+        candidates[0];
+
+      if (preferred) {
+        preferred.isWerewolf = true;
+        preferred.totemsDestroyed = p.totemsDestroyed;
+        preferred.hasEscapePassive = p.hasEscapePassive;
+        p.isWerewolf = false;
+        p.isTransformed = false;
+        p.isAlive = false;
+        this.addLog(
+          `${p.name} abandonou a partida (${reasonLabel}, -100 XP). A Maldição do Lobisomem despertou secretamente em outro morador vivo!`
+        );
+      } else {
+        p.isBot = true;
+        this.addLog(
+          `${p.name} abandonou (${reasonLabel}, -100 XP). A IA assumiu o controle do Lobisomem!`
+        );
+      }
+      this.checkLivingPlayersVictory();
+      return;
+    }
+
+    // 2. Se o jogador que caiu/abandonou era o CAÇADOR:
+    if (p.classId === 'cacador' && p.isAlive) {
+      const candidates = Array.from(this.players.values()).filter(
+        (other) => other.id !== p.id && other.isAlive && !other.isWerewolf
+      );
+      const heir =
+        candidates.find((c) => !c.isBot && c.classId === 'aldeao') ||
+        candidates.find((c) => c.classId === 'aldeao') ||
+        candidates[0];
+
+      if (heir) {
+        heir.classId = 'cacador';
+        heir.missionProgress = Math.max(heir.missionProgress, p.missionProgress);
+        heir.abilityUnlocked = heir.abilityUnlocked || p.abilityUnlocked;
+        heir.abilityCharges = Math.max(1, p.abilityCharges);
+        p.classId = 'aldeao';
+        p.isAlive = false;
+        this.addLog(
+          `O Caçador (${p.name}) caiu (${reasonLabel}, -100 XP)! ${heir.name} herdou o Rifle e as Armadilhas de Caça!`
+        );
+      } else {
+        p.isBot = true;
+        this.addLog(
+          `O Caçador (${p.name}) caiu (${reasonLabel}, -100 XP)! A IA assumiu o controle do Caçador!`
+        );
+      }
+      this.checkLivingPlayersVictory();
+      return;
+    }
+
+    // 3. Morador comum que não reconectou em 45s: a IA assume o boneco para não prejudicar a Vila
+    p.isBot = true;
+    this.addLog(
+      `${p.name} não reconectou em 45s (-100 XP). O Piloto Automático (IA) assumiu o personagem até o fim da partida.`
+    );
+  }
+
+  /**
+   * Verifica a cada tick se algum jogador desconectado ultrapassou o limite de 45 segundos
+   */
+  private checkReconnectDeadlines(now: number) {
+    for (const p of Array.from(this.players.values())) {
+      if (p.isConnected === false && p.reconnectDeadlineMs && now >= p.reconnectDeadlineMs) {
+        this.resolveExpiredReconnectOrAbandon(p.id, '45s de reconexão esgotados');
+      }
     }
   }
 
@@ -1794,9 +2001,9 @@ export class GameRoom {
   private updateTribunalState(now: number) {
     if (!this.tribunal) return;
 
-    // Bots votam de forma inteligente no Turno 1 e Turno 3 (Priorizam suspeitos das pistas de 15s e nunca votam às cegas em inocentes!)
+    // Bots (e jogadores desconectados em Piloto Automático durante os 45s!) votam de forma inteligente no Turno 1 e Turno 3
     for (const bot of this.players.values()) {
-      if (!bot.isBot || !bot.isAlive) continue;
+      if ((!bot.isBot && bot.isConnected !== false) || !bot.isAlive) continue;
       if (this.tribunal.turn === 'TURN_1_SECRET_VOTE' && !this.turn1Votes.has(bot.id)) {
         const candidates = Array.from(this.players.values()).filter(
           (p) => p.isAlive && p.id !== bot.id
@@ -2149,6 +2356,7 @@ export class GameRoom {
    */
   public tick(deltaMs: number) {
     const now = Date.now();
+    this.checkReconnectDeadlines(now);
 
     if (this.phase === 'LOBBY') {
       this.evaluateLobbyReadiness();
@@ -2416,8 +2624,9 @@ export class GameRoom {
 
   private updateBotsAI(now: number) {
     for (const bot of this.players.values()) {
+      const isAutopilotDisconnected = bot.isConnected === false;
       if (
-        !bot.isBot ||
+        (!bot.isBot && !isAutopilotDisconnected) ||
         !bot.isAlive ||
         now < bot.isStunnedEnd ||
         bot.removingBarricadeId ||

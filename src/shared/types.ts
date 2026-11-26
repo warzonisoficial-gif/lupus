@@ -139,8 +139,11 @@ export interface CorpseEntity {
 
 export interface PlayerState {
   id: string;
+  sessionToken?: string;
   name: string;
   isBot: boolean;
+  isConnected?: boolean;
+  reconnectDeadlineMs?: number | null; // Timestamp limite da janela de reconexão de 45s quando o jogador cai
   classId: ClassId;
   isWerewolf: boolean;
   isTransformed: boolean;
