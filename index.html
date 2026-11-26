@@ -118,8 +118,14 @@
         <div class="drawer-section">
           <h3>Simulação Rápida (MVP)</h3>
           <div class="controls-grid">
-            <button id="btn-start-match" class="btn-primary">
-              Reiniciar Partida (9 Jogadores)
+            <button id="btn-inworld-add-player" class="btn-primary">
+              + Entrada de Jogador BR no Lobby
+            </button>
+            <button id="btn-inworld-remove-player" class="btn-secondary">
+              - Saída de Jogador do Lobby (Zera Contador)
+            </button>
+            <button id="btn-start-match" class="btn-secondary">
+              Lotar e Iniciar Partida Agora (9 Jogadores)
             </button>
             <button id="btn-test-wolf" class="btn-secondary">
               Jogar como Lobisomem (Com Escape)
@@ -295,35 +301,6 @@
           </form>
         </div>
       </aside>
-
-      <!-- HUD FLUTUANTE DE SALA DE ESPERA ESTILO AMONG US (Travado nas Cercas da Praça da Catedral!) -->
-      <div id="in-world-lobby-hud" class="in-world-lobby-hud hidden">
-        <div class="in-world-lobby-top-row">
-          <div class="in-world-lobby-info">
-            <div class="in-world-room-header">
-              <strong id="in-world-room-title">Sala Brasil #1 — Serra da Mantiqueira</strong>
-              <span id="in-world-room-count" class="in-world-count-badge">1 / 9 Jogadores</span>
-            </div>
-            <p id="in-world-lobby-status" class="in-world-status-line">
-              Lobby cercado na Praça da Catedral Central. Vá até o Altar da Igreja [E] escolher seu personagem ou clique no Chat à esquerda!
-            </p>
-          </div>
-          <div class="in-world-lobby-actions">
-            <button id="btn-inworld-wardrobe" class="btn-primary btn-sm">
-              Altar [E]
-            </button>
-            <button id="btn-inworld-add-player" class="btn-secondary btn-sm">
-              + Jogador BR
-            </button>
-            <button id="btn-inworld-remove-player" class="btn-secondary btn-sm">
-              - Sair 1 (Zera)
-            </button>
-            <button id="btn-inworld-change-room" class="btn-secondary btn-sm">
-              Trocar Sala
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- MODAL 0: TELA DE ENTRADA & ESCOLHA DE SALA (Fecha automaticamente ao entrar na sala para liberar o boneco no mapa!) -->
       <div id="modal-brazil-lobby" class="modal-backdrop">

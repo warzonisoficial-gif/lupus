@@ -616,13 +616,12 @@ export class UIController {
     if (snap.phase === 'LOBBY') {
       if (!this.lobbyMinimizedManually) {
         modal?.classList.remove('hidden');
-        inWorldHud?.classList.add('hidden');
         leftChatWrapper?.classList.add('hidden');
       } else {
         modal?.classList.add('hidden');
-        inWorldHud?.classList.remove('hidden');
         leftChatWrapper?.classList.remove('hidden');
       }
+      inWorldHud?.classList.add('hidden');
       this.renderInWorldLobbyHud(snap);
       this.renderBrazilLobbyModal();
     } else {
