@@ -70,6 +70,7 @@ export class GameRoom {
   private positionHistory: PositionLog[] = [];
 
   private tribunal: TribunalState | null = null;
+  private tribunalStartedAt: number = 0;
   private turn1Votes: Map<string, string> = new Map(); // voterId -> targetId
   private turn3Votes: Map<string, 'A' | 'B' | 'ABSOLVE'> = new Map();
 
@@ -235,13 +236,16 @@ export class GameRoom {
       const botName = botNames[botIdx % botNames.length];
       const bot = this.addPlayer(botId, botName, true, 50000);
 
-      // Garante que haja um Caçador na partida para demonstrar a mecânica de Armadilha vs Escape
       const takenClasses = new Set(Array.from(this.players.values()).map((pl) => pl.classId));
+      // Garante presença do Caçador na partida e sorteia as demais classes entre todo o catálogo de 20 classes!
       if (!takenClasses.has('cacador')) {
         bot.classId = 'cacador';
       } else {
-        const freeSpecial = availableSpecialClasses.find((cid) => !takenClasses.has(cid));
-        bot.classId = freeSpecial || 'aldeao';
+        const freeSpecials = availableSpecialClasses.filter((cid) => !takenClasses.has(cid));
+        bot.classId =
+          freeSpecials.length > 0
+            ? freeSpecials[Math.floor(Math.random() * freeSpecials.length)]
+            : 'aldeao';
       }
       bot.abilityCharges = CLASSES_BY_ID[bot.classId].maxCharges;
       botIdx++;
@@ -344,7 +348,8 @@ export class GameRoom {
     // Enquanto estiver escondido dentro de um barril/tumba OU removendo uma barricada de madeira (4s incancelável!), não pode andar!
     if (p.hiddenInBarrelId || p.hiddenInTombId || p.removingBarricadeId) return;
 
-    let speed = 16.5;
+    // Velocidade base do servidor (36 px por tick de 80ms = ~450 px/s, alinhado com a velocidade do jogador!)
+    let speed = 36;
     if (now < p.hasSpeedBuffEnd) speed *= 1.42; // Disparada +42%
     if (now < p.guiltSlowEnd) speed *= 0.72; // Penalidade de Culpa por votar em inocente (-28% velocidade)
     if (p.isWerewolf && p.isTransformed) {
@@ -413,7 +418,7 @@ export class GameRoom {
     for (const trap of this.traps) {
       if (trap.triggered) continue;
       const dist = Math.hypot(p.x - trap.x, p.y - trap.y);
-      if (dist <= 42) {
+      if (dist <= 65) {
         trap.triggered = true;
 
         if (trap.type === 'BEAR_STUN') {
@@ -820,16 +825,163 @@ export class GameRoom {
         return { ok: true, message: 'Armadilha de Urso instalada!' };
 
       case 'lenhador': {
-        const wolf = this.findNearestPlayer(p, 130);
-        if (wolf && wolf.isWerewolf) {
-          wolf.isStunnedEnd = now + 2000;
+        const wolf = Array.from(this.players.values()).find(
+          (other) =>
+            other.id !== p.id &&
+            other.isAlive &&
+            other.isWerewolf &&
+            Math.hypot(other.x - p.x, other.y - p.y) <= 165
+        );
+        if (wolf) {
+          wolf.isStunnedEnd = now + 3500;
           wolf.isInvisibleEnd = now + 3500;
-          wolf.isTransformed = false;
+          if (this.phase === 'PHASE_1_HUNT') {
+            wolf.isTransformed = false;
+          }
           p.totalXp += XP_REWARDS.TRAP_OR_STUN_WEREWOLF;
-          this.addLog(`${p.name} acertou uma Machadada no Lobisomem, que fugiu invisível!`);
-          return { ok: true, message: 'Machadada certeira! O Lobisomem foi atordoado por 2s!' };
+          this.addLog(`${p.name} acertou uma Machadada no Lobisomem, que ficou atordoado por 3.5s!`);
+          return { ok: true, message: 'Machadada certeira! O Lobisomem foi atordoado por 3.5s!' };
         }
         return { ok: true, message: 'Machadada desferida!' };
+      }
+
+      case 'marceneiro': {
+        const nearBar = this.barricades.find(
+          (b) => Math.hypot(b.x - p.x, b.y - p.y) <= BARRICADE_INTERACT_RADIUS + 40
+        );
+        if (!nearBar) {
+          p.abilityCharges += 1;
+          p.abilityCooldownEnd = 0;
+          return {
+            ok: false,
+            message: 'Aproxime-se de uma passagem entre territórios para usar a ferramenta do Marceneiro!'
+          };
+        }
+        if (nearBar.active) {
+          nearBar.active = false;
+          nearBar.removingByPlayerId = null;
+          nearBar.removeStartedAt = 0;
+          nearBar.removeEndsAt = 0;
+          this.addLog(`O Marceneiro ${p.name} desmontou instantaneamente uma Barricada de Madeira!`);
+          return { ok: true, message: 'Barricada desmontada instantaneamente com suas ferramentas!' };
+        } else {
+          nearBar.active = true;
+          this.addLog(`O Marceneiro ${p.name} ergueu uma Barricada de Proteção na estrada!`);
+          return { ok: true, message: 'Barricada de Madeira erguida para proteger a passagem!' };
+        }
+      }
+
+      case 'sacerdote': {
+        const target = this.findNearestPlayer(p, 200);
+        if (!target) {
+          p.abilityCharges += 1;
+          p.abilityCooldownEnd = 0;
+          return { ok: false, message: 'Aproxime-se de um jogador para realizar a Confissão.' };
+        }
+        const status = target.isWerewolf
+          ? `A alma de ${target.name} emana trevas (${target.totemsDestroyed}/2 Totens profanados)!`
+          : target.abilityUnlocked
+            ? `${target.name} (${CLASSES_BY_ID[target.classId].name}) está com a habilidade CARREGADA.`
+            : `${target.name} (${CLASSES_BY_ID[target.classId].name}) está com a habilidade VAZIA (${Math.floor(target.missionProgress)}%).`;
+        return { ok: true, message: `Confissão: ${status}` };
+      }
+
+      case 'ferreiro': {
+        const ally = Array.from(this.players.values()).find(
+          (other) =>
+            other.id !== p.id &&
+            other.isAlive &&
+            Math.hypot(other.x - p.x, other.y - p.y) <= 200
+        );
+        if (!ally) {
+          p.abilityCharges += 1;
+          p.abilityCooldownEnd = 0;
+          return { ok: false, message: 'Aproxime-se de um aliado para Reforjar sua habilidade!' };
+        }
+        const allyCls = CLASSES_BY_ID[ally.classId];
+        ally.abilityUnlocked = true;
+        ally.missionProgress = 100;
+        ally.abilityCharges = allyCls.maxCharges;
+        ally.abilityCooldownEnd = 0;
+        this.addLog(`O Ferreiro ${p.name} reforjou o equipamento de ${ally.name}!`);
+        return {
+          ok: true,
+          message: `Habilidade [${allyCls.abilityName}] de ${ally.name} restaurada ao máximo!`
+        };
+      }
+
+      case 'coveiro': {
+        const corpse = this.corpses.find((c) => Math.hypot(c.x - p.x, c.y - p.y) <= 185);
+        if (!corpse) {
+          p.abilityCharges += 1;
+          p.abilityCooldownEnd = 0;
+          return { ok: false, message: 'Aproxime-se de um cadáver para realizar a Autópsia!' };
+        }
+        const deadSec = Math.max(1, Math.round((now - corpse.diedAt) / 1000));
+        const suspects =
+          corpse.nearbySuspects.length > 0
+            ? corpse.nearbySuspects.join(', ')
+            : 'ninguém avistado';
+        return {
+          ok: true,
+          message: `Autópsia de ${corpse.victimName}: morreu há ${deadSec}s. Fuga do Lobo: ${corpse.escapeDirection}. Rastros: ${suspects}.`
+        };
+      }
+
+      case 'pastor': {
+        const hiddenOrWolf = Array.from(this.players.values()).find(
+          (other) =>
+            other.id !== p.id &&
+            other.isAlive &&
+            (other.isWerewolf ||
+              other.isTransformed ||
+              other.hiddenInBarrelId ||
+              other.hiddenInTombId ||
+              isPlayerInCover(other.x, other.y))
+        );
+        if (hiddenOrWolf) {
+          hiddenOrWolf.isRevealedEnd = now + 10000;
+          const dir =
+            hiddenOrWolf.y < p.y - 120
+              ? 'Norte'
+              : hiddenOrWolf.y > p.y + 120
+                ? 'Sul'
+                : hiddenOrWolf.x > p.x
+                  ? 'Leste'
+                  : 'Oeste';
+          this.addLog(`O Cão de Guarda de ${p.name} latiu ferozmente para o ${dir}!`);
+          return {
+            ok: true,
+            message: `Cão de Guarda farejou perigo ao ${dir} (${hiddenOrWolf.name} revelado por 10s)!`
+          };
+        }
+        return { ok: true, message: 'O Cão de Guarda patrulhou a área: nenhuma fera oculta por perto.' };
+      }
+
+      case 'bardo': {
+        for (const other of this.players.values()) {
+          if (other.isAlive && Math.hypot(other.x - p.x, other.y - p.y) <= 320) {
+            other.hasSpeedBuffEnd = now + 6000;
+          }
+        }
+        this.addLog(`O Bardo ${p.name} entoou a Canção de Coragem (+Velocidade e +Missão em área)!`);
+        return {
+          ok: true,
+          message: 'Canção de Coragem! Aliados próximos ganharam velocidade e missão acelerada por 6s!'
+        };
+      }
+
+      case 'cartografo': {
+        for (const other of this.players.values()) {
+          if (other.isAlive) {
+            other.isRevealedEnd = now + 6000;
+          }
+        }
+        p.hasClarityBuffEnd = now + 10000;
+        return {
+          ok: true,
+          message: 'Olho de Águia! Todos os moradores vivos e ocultos foram revelados no mapa por 6s!'
+        };
       }
 
       case 'freira':
@@ -838,10 +990,13 @@ export class GameRoom {
 
       case 'padre': {
         for (const other of this.players.values()) {
-          if (other.isWerewolf && Math.hypot(other.x - p.x, other.y - p.y) <= 180) {
-            other.isTransformed = false;
-            other.isStunnedEnd = now + 1500;
-            this.addLog(`O Padre ${p.name} exorcizou a área e forçou o Lobisomem à forma humana!`);
+          if (other.isWerewolf && Math.hypot(other.x - p.x, other.y - p.y) <= 210) {
+            if (this.phase === 'PHASE_1_HUNT') {
+              other.isTransformed = false;
+            }
+            other.isStunnedEnd = now + 3500;
+            other.isInvisibleEnd = 0;
+            this.addLog(`O Padre ${p.name} exorcizou a área e imobilizou o Lobisomem com luz sagrada!`);
           }
         }
         return { ok: true, message: 'Exorcismo consagrado no solo!' };
@@ -868,12 +1023,33 @@ export class GameRoom {
         return { ok: true, message: 'Tribunal da Igreja convocado à distância!' };
 
       case 'inquisidor': {
-        const target = this.findNearestPlayer(p, 160);
+        const wolfInSight = Array.from(this.players.values()).find(
+          (other) =>
+            other.id !== p.id &&
+            other.isAlive &&
+            (other.isTransformed || now < other.isRevealedEnd) &&
+            Math.hypot(other.x - p.x, other.y - p.y) <= 210
+        );
+        const target = wolfInSight || this.findNearestPlayer(p, 160);
         if (!target) {
           p.abilityCharges += 1;
+          p.abilityCooldownEnd = 0;
           return { ok: false, message: 'Nenhum alvo no alcance do Julgamento Final.' };
         }
         if (target.isWerewolf) {
+          if (target.hasEscapePassive && this.phase === 'PHASE_1_HUNT') {
+            target.hasEscapePassive = false;
+            target.totemsDestroyed = 0;
+            target.isTransformed = true;
+            target.isStunnedEnd = now + 4000;
+            this.addLog(
+              `JULGAMENTO DE PRATA! O Inquisidor ${p.name} alvejou o Lobisomem (${target.name}), que queimou seu ESCAPE para sobreviver e foi revelado!`
+            );
+            return {
+              ok: true,
+              message: 'Bala de Prata atingiu o Lobisomem! Ele perdeu o Escape e foi revelado!'
+            };
+          }
           this.endMatch(
             'VILLAGE',
             `O Inquisidor ${p.name} executou o Lobisomem (${target.name}) com o Julgamento Final!`
@@ -908,12 +1084,16 @@ export class GameRoom {
       return { ok: false, message: 'Garras em recarga!' };
     }
 
-    // Na Fase 3 (Lua de Sangue), o Lobisomem pode atacar o Sino da Igreja!
+    const victim = this.findNearestPlayer(wolf, 105);
+
+    // Na Fase 3 (Lua de Sangue), o Lobisomem pode atacar o Sino da Igreja ou os moradores que o cercam!
+    // Se houver defensores vivos bem em cima do Lobo (dist <= 95), ele divide os golpes entre os defensores e o Sino!
     if (this.phase === 'PHASE_3_BLOOD_MOON') {
       const distToBell = Math.hypot(wolf.x - CHURCH_CENTER.x, wolf.y - CHURCH_CENTER.y);
-      if (distToBell <= BELL_INTERACT_RADIUS + 30) {
-        this.churchBellHp = Math.max(0, this.churchBellHp - 85);
-        wolf.abilityCooldownEnd = now + 1100; // 50% menos recarga na Lua de Sangue
+      const shouldStrikeBell = distToBell <= BELL_INTERACT_RADIUS + 30 && (!victim || Math.random() < 0.58);
+      if (shouldStrikeBell) {
+        this.churchBellHp = Math.max(0, this.churchBellHp - 20);
+        wolf.abilityCooldownEnd = now + 2100;
         this.addLog(`O Lobisomem atacou o Sino da Igreja! (HP: ${this.churchBellHp}/${this.churchBellMaxHp})`);
         if (this.churchBellHp <= 0) {
           this.endMatch(
@@ -925,7 +1105,6 @@ export class GameRoom {
       }
     }
 
-    const victim = this.findNearestPlayer(wolf, 105);
     if (!victim) {
       // Verifica se havia um morador ao alcance, mas que está protegido realizando missão!
       const missionProtectedPrey = Array.from(this.players.values()).find(
@@ -942,23 +1121,27 @@ export class GameRoom {
         };
       }
 
-      // Se estiver na Fase 3, executa Salto Predatório (dash curto)
+      // Se estiver na Fase 3, executa Salto Predatório (dash curto validado contra Rio e Barricadas)
       if (this.phase === 'PHASE_3_BLOOD_MOON' && now >= wolf.leapCooldownEnd) {
-        wolf.x = Math.max(
-          80,
-          Math.min(MAP_WIDTH - 80, Math.round(wolf.x + Math.cos(wolf.facingAngle) * 140))
+        const leapTargetX = wolf.x + Math.cos(wolf.facingAngle) * 140;
+        const leapTargetY = wolf.y + Math.sin(wolf.facingAngle) * 140;
+        const resolved = resolveMapCollisions(
+          wolf.x,
+          wolf.y,
+          leapTargetX,
+          leapTargetY,
+          this.barricades,
+          true
         );
-        wolf.y = Math.max(
-          80,
-          Math.min(MAP_HEIGHT - 80, Math.round(wolf.y + Math.sin(wolf.facingAngle) * 140))
-        );
+        wolf.x = Math.round(resolved.x);
+        wolf.y = Math.round(resolved.y);
         wolf.leapCooldownEnd = now + 8000;
         return { ok: true, message: 'Salto Predatório executado!' };
       }
       return { ok: false, message: 'Nenhuma presa ao alcance das garras.' };
     }
 
-    const attackCooldown = this.phase === 'PHASE_3_BLOOD_MOON' ? 1400 : 2800;
+    const attackCooldown = this.phase === 'PHASE_3_BLOOD_MOON' ? 16500 : 23000;
     wolf.abilityCooldownEnd = now + attackCooldown;
 
     // Verifica se a vítima possui Bênção Protetora (Freira) -> Fuga Invisível do Lobisomem
@@ -978,9 +1161,9 @@ export class GameRoom {
       };
     }
 
-    // Elimina a vítima e gera cadáver com pistas dos últimos 15s
+    // Elimina a vítima e gera cadáver com pistas dos últimos 15s (excluindo o próprio nome da vítima!)
     victim.isAlive = false;
-    const recentPassersby = this.getRecentSuspectsNear(victim.x, victim.y, 15000);
+    const recentPassersby = this.getRecentSuspectsNear(victim.x, victim.y, 15000, victim.name);
     const dirs = ['Norte', 'Sul', 'Leste', 'Oeste'];
     const escapeDir = dirs[Math.floor(Math.random() * dirs.length)];
 
@@ -1002,11 +1185,20 @@ export class GameRoom {
     return { ok: true, message: `Você eliminou ${victim.name}!` };
   }
 
-  private getRecentSuspectsNear(x: number, y: number, windowMs: number): string[] {
+  private getRecentSuspectsNear(
+    x: number,
+    y: number,
+    windowMs: number,
+    excludePlayerName?: string
+  ): string[] {
     const cutoff = Date.now() - windowMs;
     const names = new Set<string>();
     for (const log of this.positionHistory) {
-      if (log.timestamp >= cutoff && Math.hypot(log.x - x, log.y - y) <= 320) {
+      if (
+        log.playerName !== excludePlayerName &&
+        log.timestamp >= cutoff &&
+        Math.hypot(log.x - x, log.y - y) <= 360
+      ) {
         names.add(log.playerName);
       }
     }
@@ -1067,11 +1259,18 @@ export class GameRoom {
     suspectClues?: string[]
   ) {
     this.phase = 'PHASE_2_TRIBUNAL';
+    this.tribunalStartedAt = Date.now();
     this.eclipseActive = false;
     this.turn1Votes.clear();
     this.turn3Votes.clear();
 
-    // Teleporta todos os jogadores vivos para o interior da Igreja Central
+    // Teleporta todos os jogadores vivos para o interior da Igreja Central e limpa estados pendentes de barricada
+    for (const bar of this.barricades) {
+      bar.removingByPlayerId = null;
+      bar.removeStartedAt = 0;
+      bar.removeEndsAt = 0;
+    }
+
     const alivePlayers = Array.from(this.players.values()).filter((pl) => pl.isAlive);
     alivePlayers.forEach((pl, idx) => {
       const angle = (idx / Math.max(1, alivePlayers.length)) * Math.PI * 2;
@@ -1081,6 +1280,8 @@ export class GameRoom {
       pl.isPerformingMission = false;
       pl.hiddenInBarrelId = null;
       pl.hiddenInTombId = null;
+      pl.removingBarricadeId = null;
+      pl.removingBarricadeEndsAt = 0;
     });
 
     const autoClues =
@@ -1237,7 +1438,7 @@ export class GameRoom {
   private updateTribunalState(now: number) {
     if (!this.tribunal) return;
 
-    // Bots votam de forma inteligente no Turno 1 e Turno 3
+    // Bots votam de forma inteligente no Turno 1 e Turno 3 (Priorizam suspeitos das pistas de 15s e nunca votam às cegas em inocentes!)
     for (const bot of this.players.values()) {
       if (!bot.isBot || !bot.isAlive) continue;
       if (this.tribunal.turn === 'TURN_1_SECRET_VOTE' && !this.turn1Votes.has(bot.id)) {
@@ -1245,13 +1446,39 @@ export class GameRoom {
           (p) => p.isAlive && p.id !== bot.id
         );
         if (candidates.length > 0) {
-          const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          // Se o bot é morador, prioriza votar em quem apareceu no relatório de pistas perto do corpo nos últimos 15s
+          const clueSuspects = candidates.filter((c) =>
+            this.tribunal?.suspectClues.includes(c.name)
+          );
+          const pool = !bot.isWerewolf && clueSuspects.length > 0 ? clueSuspects : candidates;
+          const pick = pool[Math.floor(Math.random() * pool.length)];
           this.turn1Votes.set(bot.id, pick.id);
           this.tribunal.turn1VotesCount = this.turn1Votes.size;
         }
       } else if (this.tribunal.turn === 'TURN_3_FINAL_VERDICT' && !this.turn3Votes.has(bot.id)) {
-        const opts: ('A' | 'B' | 'ABSOLVE')[] = ['A', 'B', 'ABSOLVE'];
-        this.turn3Votes.set(bot.id, opts[Math.floor(Math.random() * opts.length)]);
+        const [idA, idB] = this.tribunal.finalists || [null, null];
+        const pA = idA ? this.players.get(idA) : undefined;
+        const pB = idB ? this.players.get(idB) : undefined;
+        const aInClues = Boolean(pA && this.tribunal.suspectClues.includes(pA.name));
+        const bInClues = Boolean(pB && this.tribunal.suspectClues.includes(pB.name));
+
+        if (bot.isWerewolf) {
+          // O Lobo tenta incriminar um inocente que esteja no altar
+          if (pA && !pA.isWerewolf) this.turn3Votes.set(bot.id, 'A');
+          else if (pB && !pB.isWerewolf) this.turn3Votes.set(bot.id, 'B');
+          else this.turn3Votes.set(bot.id, 'ABSOLVE');
+        } else {
+          // Moradores votam em quem apareceu nas pistas recentes perto do corpo; se ambos apareceram, escolhem um dos suspeitos para julgar!
+          if (aInClues && !bInClues) {
+            this.turn3Votes.set(bot.id, Math.random() < 0.88 ? 'A' : 'ABSOLVE');
+          } else if (bInClues && !aInClues) {
+            this.turn3Votes.set(bot.id, Math.random() < 0.88 ? 'B' : 'ABSOLVE');
+          } else if (aInClues && bInClues) {
+            this.turn3Votes.set(bot.id, Math.random() < 0.55 ? 'A' : 'B');
+          } else {
+            this.turn3Votes.set(bot.id, Math.random() < 0.65 ? 'ABSOLVE' : 'A');
+          }
+        }
       }
     }
 
@@ -1265,14 +1492,8 @@ export class GameRoom {
       }
       for (const [voterId, targetId] of this.turn1Votes.entries()) {
         const voter = this.players.get(voterId);
-        const target = this.players.get(targetId);
         const weight = voter?.classId === 'juiz' && voter.abilityUnlocked ? 2 : 1;
         tally.set(targetId, (tally.get(targetId) || 0) + weight);
-
-        // Regra: Toda vez que alguém vota em um inocente (inclusive no Turno 1), recebe penalidade!
-        if (voter && target && !target.isWerewolf && voter.id !== target.id) {
-          this.applyInnocentVotePenalty(voter, target, 'Turno 1');
-        }
       }
 
       const sorted = Array.from(tally.entries()).sort((a, b) => b[1] - a[1]);
@@ -1344,15 +1565,18 @@ export class GameRoom {
     const finalistA = this.players.get(idA);
     const finalistB = this.players.get(idB);
 
-    // Regra: Toda vez que alguém vota para executar um inocente no Veredito Final (mesmo que a maioria absolva),
-    // esse eleitor sofre a Penalidade de Falsa Acusação!
+    // Regra: Toda vez que alguém vota em um inocente para execução no Veredito Final (ou o indicou no Turno 1 sem ser o Lobo),
+    // esse eleitor sofre a Penalidade de Falsa Acusação (uma única vez por Tribunal)!
+    const penalizedInThisTribunal = new Set<string>();
     for (const [voterId, verdict] of this.turn3Votes.entries()) {
       const voter = this.players.get(voterId);
-      if (!voter) continue;
+      if (!voter || penalizedInThisTribunal.has(voterId)) continue;
       if (verdict === 'A' && finalistA && !finalistA.isWerewolf) {
         this.applyInnocentVotePenalty(voter, finalistA, 'Veredito Final');
+        penalizedInThisTribunal.add(voterId);
       } else if (verdict === 'B' && finalistB && !finalistB.isWerewolf) {
         this.applyInnocentVotePenalty(voter, finalistB, 'Veredito Final');
+        penalizedInThisTribunal.add(voterId);
       }
     }
 
@@ -1367,8 +1591,12 @@ export class GameRoom {
       executedSlot = 'B';
     }
 
+    // Restitui o tempo que ficou pausado durante o Tribunal para que o relógio da Fase 1 não seja consumido pela reunião!
+    const pausedDurationMs = this.tribunalStartedAt > 0 ? Date.now() - this.tribunalStartedAt : 0;
+
     if (!executed || !executedSlot) {
       this.addLog('O Tribunal decidiu ABSOLVER AMBOS os acusados. A caçada recomeça!');
+      this.phaseStartedAt += pausedDurationMs;
       this.phase = 'PHASE_1_HUNT';
       this.tribunal = null;
       return;
@@ -1381,6 +1609,7 @@ export class GameRoom {
       this.addLog(
         `TIRO DE PRATA: ${executed.name} era INOCENTE! Quem votou contra um inocente sofreu penalidade (-50 XP, habilidade zerada e lentidão de culpa)!`
       );
+      this.phaseStartedAt += pausedDurationMs;
       this.tribunal = null;
       this.phase = 'PHASE_1_HUNT';
       this.checkLivingPlayersVictory();
@@ -1423,6 +1652,24 @@ export class GameRoom {
       if (p.isWerewolf) {
         p.isTransformed = true;
         p.hasEscapePassive = false;
+        // Quando o Lobisomem estilhaça o vitral da Catedral com o Escape, ele salta para os limites da floresta
+        // e inicia a corrida de cerco contra os moradores no pátio da Igreja!
+        const escapeSpawns = [
+          { x: 680, y: 1400 },
+          { x: 2100, y: 460 },
+          { x: 2360, y: 2210 },
+          { x: 2990, y: 1350 }
+        ];
+        const sp = escapeSpawns[Math.floor(Math.random() * escapeSpawns.length)];
+        p.x = sp.x;
+        p.y = sp.y;
+        p.abilityCooldownEnd = Date.now() + 4500;
+      } else if (p.isAlive) {
+        // Na Lua de Sangue (Sudden Death final), a adrenalina desperta o poder de todos os moradores sobreviventes
+        // para que possam defender o Sino da Igreja e enfrentar a fera!
+        p.abilityUnlocked = true;
+        p.missionProgress = 100;
+        p.abilityCharges = Math.max(1, CLASSES_BY_ID[p.classId].maxCharges);
       }
     }
   }
@@ -1547,6 +1794,15 @@ export class GameRoom {
     const now = Date.now();
 
     if (this.phase === 'PHASE_1_HUNT') {
+      const elapsedPhaseSec = (now - this.phaseStartedAt) / 1000;
+      if (elapsedPhaseSec >= this.phaseDurationSec) {
+        this.endMatch(
+          'VILLAGE',
+          'O sol nasceu após os moradores resistirem à noite inteira! O Vilarejo sobreviveu!'
+        );
+        return;
+      }
+
       this.updateBarricadesProgress(now);
       this.updateAutomaticMissions(deltaMs, now);
       // Ciclo Lunar Ampliado: 75s de Lua Clara + 35s de Eclipse Lunar (110s no total)
@@ -1570,6 +1826,7 @@ export class GameRoom {
       this.updateTribunalState(now);
     } else if (this.phase === 'PHASE_3_BLOOD_MOON') {
       this.updateBarricadesProgress(now);
+      this.updateAutomaticMissions(deltaMs, now);
       const elapsedSec = (now - this.phaseStartedAt) / 1000;
       const progress = Math.min(1, elapsedSec / BLOOD_MOON_DURATION_SEC);
       // O círculo de cerco fecha gradualmente das bordas (1450px) até o pátio da igreja (270px)
@@ -1643,10 +1900,15 @@ export class GameRoom {
   }
 
   /**
-   * Move um bot até (targetX, targetY) seguindo as Trilhas e Estradas da Vila Antiga
-   * (passando pelo cruzamento central da Catedral ou pelas trilhas Norte/Sul/Oeste sem cortar caminho pelo mato!).
+   * Move um bot até (targetX, targetY) usando roteamento inteligente pelos Nós das Trilhas da Vila Antiga
+   * (ou em linha reta pela floresta densa se for o Lobisomem e não estiver atravessando o Rio Leste!).
    */
-  private moveBotTowards(bot: PlayerState, targetX: number, targetY: number) {
+  private moveBotTowards(
+    bot: PlayerState,
+    targetX: number,
+    targetY: number,
+    cutThroughForest = false
+  ) {
     let wx = targetX;
     let wy = targetY;
 
@@ -1655,22 +1917,103 @@ export class GameRoom {
     const botEast = bot.x >= 3620;
     const targetWest = targetX < 3620;
 
+    // 1. Travessia obrigatória pela Ponte Velha do Rio (y = 1400, x = 3350..3680)
     if ((botWest && targetEast) || (botEast && targetWest)) {
-      if (bot.y < 1310 || bot.y > 1490) {
-        wx = botWest ? 2990 : 3700;
+      if (bot.y < 1330 || bot.y > 1470) {
+        wx = botWest ? 3350 : 3680;
         wy = 1400;
       } else {
-        wx = targetEast ? 3720 : 2990;
+        wx = targetEast ? 3680 : 3350;
         wy = 1400;
       }
-    } else if (Math.hypot(targetX - bot.x, targetY - bot.y) > 750) {
-      // Se o destino está do outro lado da vila, roteia pela Estrada Central (y = 1400 ou x = 2100)
-      if (Math.abs(bot.y - 1400) > 260 && Math.abs(bot.x - targetX) > 450) {
-        wx = bot.x < 1200 ? 680 : bot.x > 2500 ? 2990 : 2100;
-        wy = 1400;
-      } else if (Math.abs(bot.y - 1400) <= 260 && Math.abs(bot.x - targetX) > 380) {
-        wx = targetX < 1200 ? 680 : targetX > 2500 ? 2990 : 2100;
-        wy = 1400;
+    } else if (!cutThroughForest) {
+      // 2. Moradores só podem caminhar pelas Trilhas e Clareiras -> Grafo de Waypoints das Estradas da Vila
+      const nodes = [
+        { x: 670, y: 680 },   // 0: Lago do Poço
+        { x: 1400, y: 640 },  // 1: Prado das Ovelhas
+        { x: 2100, y: 460 },  // 2: Árvore Ancestral
+        { x: 2850, y: 640 },  // 3: Prefeitura
+        { x: 680, y: 1400 },  // 4: Cabanas da Vila
+        { x: 1350, y: 1375 }, // 5: Estrada Oeste-Centro
+        { x: 2100, y: 1400 }, // 6: Praça da Catedral
+        { x: 2990, y: 1350 }, // 7: Cemitério
+        { x: 3530, y: 1400 }, // 8: Ponte do Rio
+        { x: 680, y: 2180 },  // 9: Milharal
+        { x: 1560, y: 2220 }, // 10: Bosque Sul
+        { x: 2360, y: 2210 }, // 11: Menires Rúnicos
+        { x: 3130, y: 2170 }  // 12: Ferraria
+      ];
+      const edges: number[][] = [
+        [1, 4],          // 0
+        [0, 2],          // 1
+        [1, 3, 6],       // 2
+        [2, 7],          // 3
+        [0, 5, 9],       // 4
+        [4, 6],          // 5
+        [2, 5, 7, 11],   // 6
+        [3, 6, 8, 12],   // 7
+        [7],             // 8
+        [4, 10],         // 9
+        [9, 11],         // 10
+        [6, 10, 12],     // 11
+        [7, 11]          // 12
+      ];
+
+      const distToTarget = Math.hypot(targetX - bot.x, targetY - bot.y);
+      if (distToTarget > 380) {
+        let endNode = 0;
+        let minEndD = Infinity;
+        for (let i = 0; i < nodes.length; i++) {
+          const de = Math.hypot(nodes[i].x - targetX, nodes[i].y - targetY);
+          if (de < minEndD) {
+            minEndD = de;
+            endNode = i;
+          }
+        }
+
+        // Calcula a distância de cada nó da trilha até o destino final (endNode) usando BFS reverso a partir do destino!
+        const hopsToTarget = new Array<number>(nodes.length).fill(999);
+        hopsToTarget[endNode] = 0;
+        const queue: number[] = [endNode];
+        while (queue.length > 0) {
+          const curr = queue.shift()!;
+          for (const prev of edges[curr]) {
+            if (hopsToTarget[prev] > hopsToTarget[curr] + 1) {
+              hopsToTarget[prev] = hopsToTarget[curr] + 1;
+              queue.push(prev);
+            }
+          }
+        }
+
+        let startNode = 0;
+        let minStartD = Infinity;
+        for (let i = 0; i < nodes.length; i++) {
+          const ds = Math.hypot(nodes[i].x - bot.x, nodes[i].y - bot.y);
+          if (ds < minStartD) {
+            minStartD = ds;
+            startNode = i;
+          }
+        }
+
+        // Escolhe o vizinho conectado a startNode que está a MENOS saltos do destino (endNode)
+        let nextNode = startNode;
+        let bestHops = hopsToTarget[startNode];
+        let bestEuclid = Math.hypot(nodes[startNode].x - targetX, nodes[startNode].y - targetY);
+
+        for (const nb of edges[startNode]) {
+          const nbHops = hopsToTarget[nb];
+          const nbEuclid = Math.hypot(nodes[nb].x - targetX, nodes[nb].y - targetY);
+          if (nbHops < bestHops || (nbHops === bestHops && nbEuclid < bestEuclid)) {
+            bestHops = nbHops;
+            bestEuclid = nbEuclid;
+            nextNode = nb;
+          }
+        }
+
+        // Assim que o bot já está alinhado no corredor da trilha atual (ou perto do nó inicial), avança direto para nextNode sem voltar para trás!
+        const wp = nodes[nextNode];
+        wx = wp.x;
+        wy = wp.y;
       }
     }
 
@@ -1680,20 +2023,89 @@ export class GameRoom {
 
   private updateBotsAI(now: number) {
     for (const bot of this.players.values()) {
-      if (!bot.isBot || !bot.isAlive || now < bot.isStunnedEnd) continue;
+      if (
+        !bot.isBot ||
+        !bot.isAlive ||
+        now < bot.isStunnedEnd ||
+        bot.removingBarricadeId ||
+        bot.hiddenInBarrelId ||
+        bot.hiddenInTombId
+      ) {
+        continue;
+      }
+
+      // Se um bot encontrar uma Barricada de Madeira ativa bloqueando seu caminho, ele inicia a remoção de 4s!
+      const blockingBarricade = this.barricades.find(
+        (b) =>
+          b.active &&
+          !b.removingByPlayerId &&
+          Math.hypot(b.x - bot.x, b.y - bot.y) <= BARRICADE_INTERACT_RADIUS - 15
+      );
+      if (blockingBarricade && (!bot.isWerewolf || this.phase === 'PHASE_3_BLOOD_MOON')) {
+        this.handleBarricadeInteract(bot.id);
+        continue;
+      }
 
       if (this.phase === 'PHASE_3_BLOOD_MOON') {
-        // Na Fase 3, todos correm em direção ao pátio da Igreja Central
-        const dist = Math.hypot(CHURCH_CENTER.x - bot.x, CHURCH_CENTER.y - bot.y);
-        if (dist > 140) {
-          this.moveBotTowards(bot, CHURCH_CENTER.x, CHURCH_CENTER.y);
-        } else if (bot.isWerewolf) {
+        // Na Fase 3 (Lua de Sangue), o Lobisomem avança contra o Sino e os defensores;
+        // os moradores mantêm distância tática das garras no pátio da Catedral enquanto usam habilidades e armadilhas!
+        const distToChurch = Math.hypot(CHURCH_CENTER.x - bot.x, CHURCH_CENTER.y - bot.y);
+        if (bot.isWerewolf) {
+          const prey = this.findNearestPlayer(bot, 380);
+          if (prey && Math.random() < 0.65) {
+            this.moveBotTowards(bot, prey.x, prey.y, true);
+          } else if (distToChurch > 95) {
+            this.moveBotTowards(bot, CHURCH_CENTER.x, CHURCH_CENTER.y, true);
+          }
           this.executeWerewolfAttack(bot);
+        } else {
+          const wolf = Array.from(this.players.values()).find((w) => w.isAlive && w.isWerewolf);
+          const distToWolf = wolf ? Math.hypot(wolf.x - bot.x, wolf.y - bot.y) : 999;
+
+          if (distToWolf < 145 && wolf) {
+            // Se o Lobo está colado, tenta atordoar/bater nele ou recua mantendo-se dentro do círculo de fogo!
+            if (bot.abilityUnlocked && bot.abilityCharges > 0) {
+              this.handleUseAbility(bot.id);
+            }
+            const fleeAngle = Math.atan2(bot.y - wolf.y, bot.x - wolf.x);
+            const fx = CHURCH_CENTER.x + Math.cos(fleeAngle) * Math.min(230, this.siegeRadius - 35);
+            const fy = CHURCH_CENTER.y + Math.sin(fleeAngle) * Math.min(200, this.siegeRadius - 35);
+            this.moveBotTowards(bot, fx, fy, false);
+          } else {
+            const orbitAngle = ((now / 900) + bot.id.charCodeAt(4) * 1.3) % (Math.PI * 2);
+            const orbitR = Math.min(185, Math.max(85, this.siegeRadius * 0.45));
+            const ox = CHURCH_CENTER.x + Math.cos(orbitAngle) * orbitR;
+            const oy = CHURCH_CENTER.y + Math.sin(orbitAngle) * orbitR;
+            this.moveBotTowards(bot, ox, oy, false);
+
+            if (
+              bot.abilityUnlocked &&
+              bot.abilityCharges > 0 &&
+              (bot.classId === 'cacador' ||
+                bot.classId === 'ferreira_armadilhas' ||
+                bot.classId === 'freira' ||
+                bot.classId === 'bardo') &&
+              Math.random() < 0.08
+            ) {
+              this.handleUseAbility(bot.id);
+            }
+          }
         }
         continue;
       }
 
-      // Fase 1: Bots moradores vão até a zona da missão de sua classe
+      // Fase 1: Se um bot morador encontrar um cadáver não reportado por perto, ele reporta e convoca o Tribunal!
+      if (!bot.isWerewolf) {
+        const nearbyCorpse = this.corpses.find(
+          (c) => !c.reported && Math.hypot(c.x - bot.x, c.y - bot.y) <= 210
+        );
+        if (nearbyCorpse && Math.random() < 0.65) {
+          this.handleReportOrBell(bot.id);
+          return;
+        }
+      }
+
+      // Fase 1: Bots moradores vão até a zona da missão de sua classe (e ficam lá até carregar 100%!)
       if (!bot.isWerewolf) {
         const cls = CLASSES_BY_ID[bot.classId];
         const zone = VILLAGE_ZONES.find((z) => z.id === cls.missionZone);
@@ -1701,37 +2113,87 @@ export class GameRoom {
           const tx = zone.x + zone.width / 2;
           const ty = zone.y + zone.height / 2;
           const dist = Math.hypot(tx - bot.x, ty - bot.y);
-          if (dist > 60 && !bot.abilityUnlocked) {
-            this.moveBotTowards(bot, tx, ty);
-          } else if (!bot.abilityUnlocked && Math.random() < 0.08) {
-            this.handleMissionInteract(bot.id);
+          if (!bot.abilityUnlocked) {
+            if (dist > 70) {
+              this.moveBotTowards(bot, tx, ty);
+            }
+            // Quando já está dentro da zona (dist <= 70), permanece no local para updateAutomaticMissions carregar até 100%!
           } else {
-            // Patrulha pelo vilarejo e instala armadilhas se for Caçador
-            const patrolAngle = bot.facingAngle + (Math.random() - 0.5) * 0.4;
-            this.handleMove(bot.id, Math.cos(patrolAngle), Math.sin(patrolAngle), patrolAngle);
-            if (bot.classId === 'cacador' && bot.abilityUnlocked && bot.abilityCharges > 0 && Math.random() < 0.03) {
+            // Habilidade já liberada -> Patrulha pelas trilhas da vila e usa habilidades táticas
+            const patrolTargets = [
+              CHURCH_CENTER,
+              { x: 680, y: 1400 },
+              { x: 2990, y: 1330 },
+              { x: 2100, y: 460 },
+              { x: 2360, y: 2210 }
+            ];
+            const pickIdx = Math.floor(((now / 7000) + bot.id.charCodeAt(4)) % patrolTargets.length);
+            const pt = patrolTargets[pickIdx];
+            this.moveBotTowards(bot, pt.x, pt.y);
+
+            if (
+              (bot.classId === 'cacador' ||
+                bot.classId === 'ferreira_armadilhas' ||
+                bot.classId === 'freira' ||
+                bot.classId === 'bardo' ||
+                bot.classId === 'pastor') &&
+              bot.abilityCharges > 0 &&
+              Math.random() < 0.045
+            ) {
               this.handleUseAbility(bot.id);
+            } else if (
+              (bot.classId === 'inquisidor' ||
+                bot.classId === 'lenhador' ||
+                bot.classId === 'padre') &&
+              bot.abilityCharges > 0
+            ) {
+              // Se o bot Inquisidor, Lenhador ou Padre avistar o Lobisomem TRANSFORMADO ou REVELADO por perto, usa sua habilidade na hora!
+              const visibleWolf = Array.from(this.players.values()).find(
+                (other) =>
+                  other.id !== bot.id &&
+                  other.isAlive &&
+                  other.isWerewolf &&
+                  (other.isTransformed || now < other.isRevealedEnd) &&
+                  Math.hypot(other.x - bot.x, other.y - bot.y) <= 175
+              );
+              if (visibleWolf) {
+                this.handleUseAbility(bot.id);
+              }
             }
           }
         }
       } else {
-        // Bot Lobisomem: destrói totens primeiro para garantir o Escape e depois caça
-        const nextTotem = this.totems.find((t) => !t.destroyed);
-        if (nextTotem && !bot.hasEscapePassive) {
-          const dist = Math.hypot(nextTotem.x - bot.x, nextTotem.y - bot.y);
-          this.moveBotTowards(bot, nextTotem.x, nextTotem.y);
-          if (dist <= 95) {
+        // Bot Lobisomem: prioriza destruir os 2 Totens Rúnicos mais próximos para ativar o ESCAPE
+        // antes de iniciar a caçada letal (garantindo sobrevivência contra o Tribunal e o Caçador!)
+        const availableTotems = this.totems.filter((t) => !t.destroyed);
+        if (availableTotems.length > 0 && !bot.hasEscapePassive) {
+          availableTotems.sort(
+            (a, b) => Math.hypot(a.x - bot.x, a.y - bot.y) - Math.hypot(b.x - bot.x, b.y - bot.y)
+          );
+          const targetTotem = availableTotems[0];
+          this.moveBotTowards(bot, targetTotem.x, targetTotem.y, true);
+          if (Math.hypot(targetTotem.x - bot.x, targetTotem.y - bot.y) <= 98) {
             this.handleMissionInteract(bot.id);
           }
         } else {
-          if (!bot.isTransformed && isPlayerInCover(bot.x, bot.y)) {
-            bot.isTransformed = true;
-          }
-          const prey = this.findNearestPlayer(bot, 900);
+          const prey = this.findNearestPlayer(bot, 4500);
           if (prey) {
-            this.moveBotTowards(bot, prey.x, prey.y);
-            if (Math.hypot(prey.x - bot.x, prey.y - bot.y) <= 95 && bot.isTransformed) {
-              this.executeWerewolfAttack(bot);
+            const distToPrey = Math.hypot(prey.x - bot.x, prey.y - bot.y);
+            this.moveBotTowards(bot, prey.x, prey.y, bot.isTransformed);
+            if (distToPrey <= 145 && !bot.isTransformed && isPlayerInCover(bot.x, bot.y)) {
+              bot.isTransformed = true;
+            }
+            if (distToPrey <= 102) {
+              if (!bot.isTransformed && isPlayerInCover(bot.x, bot.y)) {
+                bot.isTransformed = true;
+              }
+              if (bot.isTransformed) {
+                const res = this.executeWerewolfAttack(bot);
+                // Após abater uma presa na Fase 1, volta ao disfarce humano para fugir sem ser baleado pelo Inquisidor!
+                if (res.ok && this.phase === 'PHASE_1_HUNT') {
+                  bot.isTransformed = false;
+                }
+              }
             }
           }
         }
@@ -1775,7 +2237,10 @@ export class GameRoom {
     return {
       roomId: this.roomId,
       phase: this.phase,
-      phaseTimerSec,
+      phaseTimerSec:
+        this.phase === 'PHASE_2_TRIBUNAL' && this.tribunal
+          ? Math.max(0, Math.ceil((this.tribunal.turnEndsAt - now) / 1000))
+          : phaseTimerSec,
       eclipseActive: this.eclipseActive,
       eclipseRemainingSec,
       siegeRadius: this.siegeRadius,

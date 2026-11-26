@@ -95,11 +95,13 @@ export class VillageScene extends Phaser.Scene {
   public updateSnapshot(snap: WorldSnapshot) {
     const me = snap.players.find((p) => p.id === this.socket.id);
     if (me) {
+      const serverDist = Math.hypot(me.x - this.predictedX, me.y - this.predictedY);
       if (
         !this.hasInitializedPrediction ||
         snap.phase !== this.lastKnownPhase ||
         me.hiddenInBarrelId ||
-        me.hiddenInTombId
+        me.hiddenInTombId ||
+        serverDist > 110
       ) {
         this.predictedX = me.x;
         this.predictedY = me.y;
