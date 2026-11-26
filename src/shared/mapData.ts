@@ -57,14 +57,10 @@ export const UNDER_BRIDGE_SHADOW = {
 };
 
 /**
- * MECÂNICA EXCLUSIVA 4: Barris de Esconderijo (Exclusivos do território das Cabanas da Vila / Taverna!)
+ * MECÂNICA EXCLUSIVA 4: O Barril de Esconderijo (Apenas 1 barril exclusivo no centro das Cabanas da Vila!)
  */
 export const HIDING_BARRELS: HidingBarrel[] = [
-  { id: 'barrel_cabin_1', sectorName: 'Cabanas da Vila', x: 480, y: 1280 },
-  { id: 'barrel_cabin_2', sectorName: 'Cabanas da Vila', x: 740, y: 1250 },
-  { id: 'barrel_cabin_3', sectorName: 'Cabanas da Vila', x: 520, y: 1540 },
-  { id: 'barrel_cabin_4', sectorName: 'Cabanas da Vila', x: 820, y: 1520 },
-  { id: 'barrel_cabin_5', sectorName: 'Cabanas da Vila', x: 650, y: 1400 }
+  { id: 'barrel_cabin_1', sectorName: 'Cabanas da Vila', x: 650, y: 1400 }
 ];
 
 export const BARREL_INTERACT_RADIUS = 95;
