@@ -305,8 +305,42 @@ export class UIController {
     });
 
     document.getElementById('btn-lobby-fill-instant')?.addEventListener('click', () => {
-      this.socket.emit('start_match', 9);
-      this.showToast('Partida iniciada com 9 jogadores!');
+      const req = this.latestSnapshot?.requiredPlayers || 9;
+      this.socket.emit('start_match', req);
+      this.showToast(`Partida iniciada com ${req} jogadores!`);
+    });
+
+    document.getElementById('form-create-room')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const roomNameEl = document.getElementById('create-room-name') as HTMLInputElement | null;
+      const regionEl = document.getElementById('create-room-region') as HTMLSelectElement | null;
+      const minPlayersEl = document.getElementById(
+        'create-room-min-players'
+      ) as HTMLSelectElement | null;
+      const playerNameEl = document.getElementById('lobby-player-name') as HTMLInputElement | null;
+
+      const roomName = roomNameEl?.value.trim() || '';
+      if (!roomName) {
+        this.showToast('Digite um nome para criar sua sala!');
+        return;
+      }
+
+      const regionLabel = regionEl?.value || 'BR • Sudeste (São Paulo • 12ms)';
+      const requiredPlayers = Number(minPlayersEl?.value) || 9;
+      const playerName = playerNameEl?.value.trim() || 'Você (Jogador)';
+
+      this.socket.emit(
+        'create_room',
+        { roomName, regionLabel, requiredPlayers, playerName },
+        (res?: { ok: boolean; message: string }) => {
+          if (res?.ok && roomNameEl) {
+            roomNameEl.value = '';
+          }
+          if (res?.message) {
+            this.showToast(res.message);
+          }
+        }
+      );
     });
 
     document.getElementById('btn-skip-tribunal-turn')?.addEventListener('click', () => {
@@ -513,10 +547,15 @@ export class UIController {
                 ? `Iniciando em ${r.lobbyCountdownSec}s`
                 : `No Lobby (${r.playerCount}/${r.requiredPlayers})`
               : `Em Jogo (${r.playerCount}/${r.maxPlayers})`;
+          const creatorInfo =
+            r.isCustom && r.creatorName
+              ? `<span class="br-room-creator-tag">Criada por ${this.escapeHtml(r.creatorName)}</span>`
+              : '';
           return `
             <div class="br-room-card ${isCurrent ? 'active-room' : ''}">
               <div class="br-room-header">
                 <h4>${this.escapeHtml(r.roomName)}</h4>
+                ${creatorInfo}
               </div>
               <div class="br-room-region">${this.escapeHtml(r.regionLabel)}</div>
               <div class="br-room-meta">

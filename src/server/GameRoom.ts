@@ -55,6 +55,8 @@ export class GameRoom {
   public regionLabel: string;
   public requiredPlayers: number = 9;
   public maxPlayers: number = 12;
+  public isCustom: boolean = false;
+  public creatorName?: string;
   private lobbyCountdownEndsAt: number | null = null;
   public readonly lobbyCountdownDurationMs: number = 5000; // 5 segundos de contagem regressiva após completar o time!
 
@@ -92,7 +94,9 @@ export class GameRoom {
     roomName = 'Sala Brasil #1 — Serra da Mantiqueira',
     regionLabel = 'BR • São Paulo (14ms)',
     requiredPlayers = 9,
-    maxPlayers = 12
+    maxPlayers = 12,
+    isCustom = false,
+    creatorName?: string
   ) {
     this.roomId = roomId;
     this.io = io;
@@ -100,6 +104,8 @@ export class GameRoom {
     this.regionLabel = regionLabel;
     this.requiredPlayers = requiredPlayers;
     this.maxPlayers = maxPlayers;
+    this.isCustom = isCustom;
+    this.creatorName = creatorName;
     this.resetMapEntities();
   }
 
@@ -117,7 +123,9 @@ export class GameRoom {
       playerCount: this.players.size,
       requiredPlayers: this.requiredPlayers,
       maxPlayers: this.maxPlayers,
-      lobbyCountdownSec
+      lobbyCountdownSec,
+      isCustom: this.isCustom,
+      creatorName: this.creatorName
     };
   }
 

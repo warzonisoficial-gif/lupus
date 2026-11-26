@@ -212,6 +212,8 @@ export interface BrazilianRoomSummary {
   requiredPlayers: number;
   maxPlayers: number;
   lobbyCountdownSec: number | null;
+  isCustom?: boolean;
+  creatorName?: string;
 }
 
 export interface WorldSnapshot {

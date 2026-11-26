@@ -276,11 +276,43 @@
           </div>
 
           <div class="lobby-split-grid">
-            <!-- Coluna Esquerda: Lista das 6 Salas Brasileiras -->
+            <!-- Coluna Esquerda: Criar Sala + Lista das Salas Brasileiras -->
             <div class="lobby-rooms-col">
+              <form id="form-create-room" class="lobby-create-room-box" autocomplete="off">
+                <div class="lobby-section-title">
+                  <h3>Criar Nova Sala Brasileira</h3>
+                  <span>Qualquer jogador pode criar sua sala</span>
+                </div>
+                <div class="create-room-fields">
+                  <input
+                    id="create-room-name"
+                    type="text"
+                    maxlength="32"
+                    placeholder="Nome da sala (ex: Noite na Vila)..."
+                    required
+                  />
+                  <select id="create-room-region" aria-label="Servidor Regional do Brasil">
+                    <option value="BR • Sudeste (São Paulo • 12ms)">BR • Sudeste (São Paulo)</option>
+                    <option value="BR • Sudeste (Minas Gerais • 15ms)">BR • Sudeste (Minas Gerais)</option>
+                    <option value="BR • Sul (Porto Alegre • 19ms)">BR • Sul (Porto Alegre)</option>
+                    <option value="BR • Nordeste (Salvador • 24ms)">BR • Nordeste (Salvador)</option>
+                    <option value="BR • Norte (Manaus • 32ms)">BR • Norte (Manaus)</option>
+                    <option value="BR • Centro-Oeste (Goiânia • 18ms)">BR • Centro-Oeste (Goiânia)</option>
+                  </select>
+                  <select id="create-room-min-players" aria-label="Mínimo de jogadores para iniciar">
+                    <option value="9" selected>9 Jogadores (Padrão)</option>
+                    <option value="6">6 Jogadores (Rápida)</option>
+                    <option value="12">12 Jogadores (Completa)</option>
+                  </select>
+                  <button type="submit" id="btn-create-custom-room" class="btn-primary btn-sm">
+                    Criar Sala
+                  </button>
+                </div>
+              </form>
+
               <div class="lobby-section-title">
                 <h3>Escolha uma Sala Brasileira</h3>
-                <span>Mínimo: 9 jogadores • Máximo: 12</span>
+                <span>Oficiais e Criadas por Jogadores</span>
               </div>
               <div id="brazil-rooms-grid" class="brazil-rooms-grid"></div>
             </div>

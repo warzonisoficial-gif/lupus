@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
+import { sanitizeTribunalChatMessage } from '../shared/profanityFilter';
 import { BrazilianRoomSummary, ClassId } from '../shared/types';
 import { GameRoom } from './GameRoom';
 
@@ -147,6 +148,79 @@ io.on('connection', (socket) => {
           ok: true,
           message: `Você entrou em [${nextRoom.roomName}] (${nextRoom.getRoomSummary().playerCount}/${nextRoom.requiredPlayers} jogadores)!`,
           room: nextRoom.getRoomSummary()
+        });
+      }
+    }
+  );
+
+  // Permitir que os próprios jogadores criem suas salas personalizadas brasileiras
+  socket.on(
+    'create_room',
+    (
+      payload: {
+        roomName: string;
+        regionLabel?: string;
+        requiredPlayers?: number;
+        playerName?: string;
+      },
+      cb?: (res: { ok: boolean; message: string; room?: BrazilianRoomSummary }) => void
+    ) => {
+      const rawRoomName = (payload?.roomName || '').trim();
+      if (!rawRoomName) {
+        if (cb) cb({ ok: false, message: 'Digite um nome para a sua sala!' });
+        return;
+      }
+
+      const meta = socketMeta.get(socket.id) || { name: playerName, xp: initialXp };
+      if (payload.playerName && payload.playerName.trim()) {
+        const cleanPlayerName = sanitizeTribunalChatMessage(payload.playerName.trim()).cleanText.slice(0, 22);
+        meta.name = cleanPlayerName || meta.name;
+        socketMeta.set(socket.id, meta);
+      }
+
+      const sanitizedRoom = sanitizeTribunalChatMessage(rawRoomName);
+      const finalRoomName = sanitizedRoom.cleanText.slice(0, 34) || `Sala de ${meta.name}`;
+      const finalRegion =
+        (payload.regionLabel && payload.regionLabel.trim().slice(0, 44)) ||
+        'BR • Sudeste (São Paulo • 12ms)';
+      const reqPlayers = Math.max(4, Math.min(12, Number(payload.requiredPlayers) || 9));
+      const maxPlayers = Math.max(reqPlayers, 12);
+
+      const customRoomId = `br_custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const customRoom = new GameRoom(
+        customRoomId,
+        io,
+        finalRoomName,
+        finalRegion,
+        reqPlayers,
+        maxPlayers,
+        true,
+        meta.name
+      );
+      rooms.set(customRoomId, customRoom);
+
+      const prevRoomId = socketToRoom.get(socket.id);
+      if (prevRoomId && prevRoomId !== customRoomId) {
+        const prevRoom = rooms.get(prevRoomId);
+        prevRoom?.removePlayer(socket.id);
+        socket.leave(prevRoomId);
+      }
+
+      socketToRoom.set(socket.id, customRoomId);
+      socket.join(customRoomId);
+      customRoom.addPlayer(socket.id, meta.name, false, meta.xp);
+      customRoom.addLog(
+        `Sala brasileira [${finalRoomName}] criada por ${meta.name} (Mínimo: ${reqPlayers} jogadores).`
+      );
+
+      io.emit('rooms_list', getAllRoomsSummary());
+      socket.emit('snapshot', customRoom.getSnapshotForPlayer(socket.id));
+
+      if (cb) {
+        cb({
+          ok: true,
+          message: `Sala [${finalRoomName}] criada com sucesso! Aguardando ${customRoom.getRoomSummary().playerCount}/${reqPlayers} jogadores.`,
+          room: customRoom.getRoomSummary()
         });
       }
     }
