@@ -190,13 +190,13 @@ export class VillageScene extends Phaser.Scene {
       .setOrigin(0.5, 0.78)
       .setDepth(CHURCH_CENTER.y + 15);
 
-    // Armário / Baú de Trajes da Praça da Catedral (Estilo Among Us: caminhe até ele no Lobby e aperte [E] ou o botão TRAJES para escolher seu personagem!)
+    // Altar Sagrado da Igreja (no topo do tapete vermelho da Catedral: caminhe até o Altar no Lobby e aperte [E] para escolher seu personagem!)
     this.add
       .image(LOBBY_WARDROBE_POS.x, LOBBY_WARDROBE_POS.y, 'prop_wardrobe_25d')
-      .setOrigin(0.5, 0.86)
+      .setOrigin(0.5, 0.82)
       .setDepth(LOBBY_WARDROBE_POS.y);
     this.add
-      .text(LOBBY_WARDROBE_POS.x, LOBBY_WARDROBE_POS.y - 76, 'ARMÁRIO DE PERSONAGENS [E]', {
+      .text(LOBBY_WARDROBE_POS.x, LOBBY_WARDROBE_POS.y - 68, 'ALTAR DE PERSONAGENS [E]', {
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',

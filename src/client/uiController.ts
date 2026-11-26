@@ -643,7 +643,7 @@ export class UIController {
         const missing = Math.max(0, snap.requiredPlayers - snap.players.length);
         statusEl.textContent =
           missing > 0
-            ? `Aguardando mais ${missing} jogador(es) na Praça da Catedral... Converse no chat ou vá ao Armário [E] escolher seu personagem!`
+            ? `Aguardando mais ${missing} jogador(es) na Praça da Catedral... Vá até o Altar da Igreja [E] escolher seu personagem!`
             : 'Preparando sorteio do Lobisomem e do Caçador...';
       }
     }

@@ -1003,44 +1003,90 @@ export class AssetGenerator {
       ctx.fill();
     });
 
-    // 9. Armário / Baú de Trajes da Vila 2.5D (Para escolher o personagem andando no Lobby, estilo Among Us!) (76x86)
-    this.createCanvas(scene, 'prop_wardrobe_25d', 76, 86, (ctx, w, _h) => {
+    // 9. Altar Sagrado da Igreja 2.5D (Para escolher o personagem andando até o Altar no Lobby!) (104x78)
+    this.createCanvas(scene, 'prop_wardrobe_25d', 104, 78, (ctx, w, _h) => {
       const cx = w / 2;
-      // Sombra no chão
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      // Sombra projetada do Altar sobre o tapete da Catedral
+      ctx.fillStyle = 'rgba(0,0,0,0.52)';
       ctx.beginPath();
-      ctx.ellipse(cx, 76, 30, 9, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, 66, 46, 10, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Estrutura de carvalho nobre com moldura de bronze
-      ctx.fillStyle = '#3b2313';
+      // Degrau de pedra sagrada na base do altar
+      ctx.fillStyle = '#334155';
       ctx.strokeStyle = '#090d16';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.8;
       ctx.beginPath();
-      ctx.roundRect(cx - 26, 14, 52, 60, 6);
+      ctx.roundRect(cx - 44, 52, 88, 14, 4);
       ctx.fill();
       ctx.stroke();
 
-      // Topo entalhado dourado
-      ctx.fillStyle = '#b45309';
+      // Mesa do Altar em pedra gótica e carvalho escuro
+      ctx.fillStyle = '#475569';
       ctx.beginPath();
-      ctx.roundRect(cx - 29, 10, 58, 9, 4);
+      ctx.roundRect(cx - 38, 26, 76, 28, 5);
       ctx.fill();
       ctx.stroke();
 
-      // Duas portas de madeira com divisória central e puxadores de ouro
-      ctx.fillStyle = '#5c3419';
-      ctx.fillRect(cx - 22, 22, 20, 46);
-      ctx.strokeRect(cx - 22, 22, 20, 46);
-      ctx.fillRect(cx + 2, 22, 20, 46);
-      ctx.strokeRect(cx + 2, 22, 20, 46);
-
-      // Puxadores dourados
-      ctx.fillStyle = '#fbbf24';
+      // Tampo superior de pedra polida do Altar
+      ctx.fillStyle = '#64748b';
       ctx.beginPath();
-      ctx.arc(cx - 6, 45, 2.8, 0, Math.PI * 2);
-      ctx.arc(cx + 6, 45, 2.8, 0, Math.PI * 2);
+      ctx.roundRect(cx - 41, 22, 82, 8, 3);
       ctx.fill();
+      ctx.stroke();
+
+      // Manto / Pano Litúrgico Carmesim com bordado e Cruz Dourada no centro do Altar
+      ctx.fillStyle = '#991b1b';
+      ctx.fillRect(cx - 18, 22, 36, 32);
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.2;
+      ctx.strokeRect(cx - 18, 22, 36, 32);
+
+      // Cruz Dourada bordada na frente do Altar
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(cx, 30);
+      ctx.lineTo(cx, 48);
+      ctx.moveTo(cx - 6, 37);
+      ctx.lineTo(cx + 6, 37);
+      ctx.stroke();
+
+      // Livro Sagrado aberto no centro do Altar
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(cx - 11, 15, 22, 9, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, 15);
+      ctx.lineTo(cx, 24);
+      ctx.stroke();
+
+      // 2 Candelabros / Velas Votivas Acesas nas extremidades do Altar
+      [cx - 28, cx + 28].forEach((vx) => {
+        // Castiçal dourado
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(vx - 3, 18, 6, 6);
+        // Vela branca
+        ctx.fillStyle = '#fef9c3';
+        ctx.fillRect(vx - 2, 10, 4, 9);
+        // Halo e chama da vela
+        const glow = ctx.createRadialGradient(vx, 7, 1, vx, 7, 9);
+        glow.addColorStop(0, 'rgba(254, 240, 138, 0.95)');
+        glow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(vx, 7, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.arc(vx, 7, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
     });
 
     // 10. Relíquia do Caçador no Chão 2.5D (Rifle de Caça + Bolsa de Armadilhas com Aura Esmeralda/Ouro) (68x56)

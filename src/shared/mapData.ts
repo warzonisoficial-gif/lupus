@@ -13,8 +13,8 @@ export const MAP_HEIGHT = 2800;
 export const CHURCH_CENTER = { x: 2100, y: 1400 };
 export const BELL_INTERACT_RADIUS = 130;
 
-// Armário / Baú de Trajes da Praça da Catedral (para trocar de personagem caminhando no Lobby, estilo Among Us!)
-export const LOBBY_WARDROBE_POS = { x: 1940, y: 1385 };
+// Altar Sagrado da Igreja (no topo do tapete vermelho da Catedral: caminhe até o Altar no Lobby e aperte [E] para escolher seu personagem!)
+export const LOBBY_WARDROBE_POS = { x: 2100, y: 1295 };
 export const LOBBY_WARDROBE_INTERACT_RADIUS = 115;
 
 // Cercas / Portões de Madeira do Lobby nas 4 Passagens que saem da Praça da Catedral Central:
