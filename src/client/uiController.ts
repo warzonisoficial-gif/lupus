@@ -35,6 +35,8 @@ export class UIController {
   private lastTribunalTurnRendered: string = '';
   private lastTribunalChatLastId: string = '';
   private lastLobbyChatLastId: string = '';
+  private lobbyChatDrawerOpen: boolean = false;
+  private lobbyChatSeenCount: number = 0;
   private lastRoomsRenderSignature: string = '';
   private wasLocalPlayerAlive: boolean = true;
   private wasLocalPlayerWerewolf: boolean = false;
@@ -258,6 +260,34 @@ export class UIController {
       this.socket.emit('list_rooms');
       document.getElementById('modal-brazil-lobby')?.classList.remove('hidden');
       this.renderBrazilLobbyModal();
+    });
+
+    const toggleLobbyChat = (forceOpen?: boolean) => {
+      this.lobbyChatDrawerOpen =
+        typeof forceOpen === 'boolean' ? forceOpen : !this.lobbyChatDrawerOpen;
+      const drawer = document.getElementById('lobby-left-chat-drawer');
+      const tabBtn = document.getElementById('btn-toggle-lobby-chat');
+      const unreadBadge = document.getElementById('lobby-chat-unread-badge');
+
+      if (this.lobbyChatDrawerOpen) {
+        drawer?.classList.remove('hidden');
+        tabBtn?.classList.add('chat-open');
+        unreadBadge?.classList.add('hidden');
+        this.lobbyChatSeenCount = this.latestSnapshot?.lobbyChatMessages?.length || 0;
+        const input = document.getElementById('in-world-chat-input') as HTMLInputElement | null;
+        window.setTimeout(() => input?.focus(), 40);
+      } else {
+        drawer?.classList.add('hidden');
+        tabBtn?.classList.remove('chat-open');
+      }
+    };
+
+    document.getElementById('btn-toggle-lobby-chat')?.addEventListener('click', () => {
+      toggleLobbyChat();
+    });
+
+    document.getElementById('btn-close-lobby-chat')?.addEventListener('click', () => {
+      toggleLobbyChat(false);
     });
 
     document.getElementById('in-world-chat-form')?.addEventListener('submit', (e) => {
@@ -545,6 +575,7 @@ export class UIController {
   private updateBrazilLobbyState(snap: WorldSnapshot, prevPhase?: string) {
     const modal = document.getElementById('modal-brazil-lobby');
     const inWorldHud = document.getElementById('in-world-lobby-hud');
+    const leftChatWrapper = document.getElementById('lobby-left-chat-wrapper');
     const roomsBtnLabel = document.getElementById('btn-rooms-label');
     if (roomsBtnLabel) {
       roomsBtnLabel.textContent =
@@ -572,15 +603,18 @@ export class UIController {
       if (!this.lobbyMinimizedManually) {
         modal?.classList.remove('hidden');
         inWorldHud?.classList.add('hidden');
+        leftChatWrapper?.classList.add('hidden');
       } else {
         modal?.classList.add('hidden');
         inWorldHud?.classList.remove('hidden');
+        leftChatWrapper?.classList.remove('hidden');
       }
       this.renderInWorldLobbyHud(snap);
       this.renderBrazilLobbyModal();
     } else {
       modal?.classList.add('hidden');
       inWorldHud?.classList.add('hidden');
+      leftChatWrapper?.classList.add('hidden');
     }
   }
 
@@ -619,7 +653,23 @@ export class UIController {
 
   private renderLobbyChatMessages(messages: WorldSnapshot['lobbyChatMessages']) {
     const box = document.getElementById('in-world-chat-messages');
+    const unreadBadge = document.getElementById('lobby-chat-unread-badge');
     if (!box) return;
+
+    if (this.lobbyChatDrawerOpen) {
+      this.lobbyChatSeenCount = messages.length;
+      unreadBadge?.classList.add('hidden');
+    } else {
+      const unread = Math.max(0, messages.length - this.lobbyChatSeenCount);
+      if (unreadBadge) {
+        if (unread > 0) {
+          unreadBadge.textContent = `${unread}`;
+          unreadBadge.classList.remove('hidden');
+        } else {
+          unreadBadge.classList.add('hidden');
+        }
+      }
+    }
 
     const lastId = messages[messages.length - 1]?.id || 'empty';
     if (lastId === this.lastLobbyChatLastId) return;
