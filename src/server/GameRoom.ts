@@ -174,6 +174,13 @@ export class GameRoom {
     const cls = CLASSES_BY_ID[requestedClass];
     if (!cls) return { ok: false, reason: 'Classe inválida.' };
 
+    if (player.totalXp < cls.requiredXp) {
+      return {
+        ok: false,
+        reason: `Classe bloqueada! Requer Nv.${cls.requiredLevel} (${cls.requiredXp.toLocaleString('pt-BR')} XP).`
+      };
+    }
+
     if (!cls.unlimitedInRoom) {
       for (const other of this.players.values()) {
         if (other.id !== playerId && other.classId === requestedClass) {

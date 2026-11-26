@@ -976,7 +976,7 @@ body {
 }
 
 .class-item-card {
-  background-color: #110c08;
+  background-color: #140e09;
   border: 1.5px solid var(--border-wood);
   border-radius: 8px;
   padding: 12px;
@@ -984,6 +984,33 @@ body {
   flex-direction: column;
   justify-content: space-between;
   gap: 10px;
+  transition: opacity 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.class-item-card.class-card-equipped {
+  border-color: #40916c;
+  background-color: #102117;
+}
+
+/* Classes ainda não liberadas (bloqueadas por XP/Nível) ficam bem mais escuras */
+.class-item-card.class-card-locked {
+  background-color: #060807;
+  border-color: #1c1510;
+  opacity: 0.48;
+  filter: brightness(0.68) saturate(0.45);
+}
+
+.class-item-card.class-card-locked .class-portrait {
+  filter: brightness(0.45) grayscale(0.75);
+  border-color: #291d14;
+}
+
+.class-item-card.class-card-locked .class-item-header h4 {
+  color: #8c7f70;
+}
+
+.xp-req-locked {
+  color: #a37b5c !important;
 }
 
 .class-card-top {

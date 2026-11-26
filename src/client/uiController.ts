@@ -973,14 +973,16 @@ export class UIController {
     }
 
     const me = this.latestSnapshot?.players.find((p) => p.id === this.socket.id);
+    const myXp = me?.totalXp ?? 15000;
 
     grid.innerHTML = CLASSES_LIST.map((cls) => {
       const holderName = !cls.unlimitedInRoom ? takenByOther.get(cls.id) : undefined;
       const isMyClass = me?.classId === cls.id;
+      const isLockedByXp = myXp < cls.requiredXp;
       const portraitUrl = this.getCharacterPortraitDataUrl(cls.id);
 
       return `
-        <div class="class-item-card">
+        <div class="class-item-card ${isLockedByXp ? 'class-card-locked' : ''} ${isMyClass ? 'class-card-equipped' : ''}">
           <div class="class-card-top">
             ${
               portraitUrl
@@ -990,7 +992,7 @@ export class UIController {
             <div style="flex: 1; min-width: 0;">
               <div class="class-item-header">
                 <h4>${cls.order}. ${cls.name}</h4>
-                <span class="class-xp-req">Nv.${cls.requiredLevel} (${cls.requiredXp.toLocaleString('pt-BR')} XP)</span>
+                <span class="class-xp-req ${isLockedByXp ? 'xp-req-locked' : ''}">Nv.${cls.requiredLevel} (${cls.requiredXp.toLocaleString('pt-BR')} XP)</span>
               </div>
               <div class="class-meta-line"><strong>Missão:</strong> ${cls.missionTitle}</div>
               <div class="class-meta-line"><strong>${cls.abilityName}:</strong> ${cls.abilityDescription}</div>
@@ -999,16 +1001,18 @@ export class UIController {
           <button
             class="${isMyClass ? 'btn-primary' : 'btn-secondary'}"
             data-select-class="${cls.id}"
-            ${holderName ? 'disabled' : ''}
+            ${holderName || isLockedByXp ? 'disabled' : ''}
           >
             ${
               isMyClass
                 ? 'Classe Equipada'
-                : holderName
-                  ? `Travada por ${holderName}`
-                  : cls.unlimitedInRoom
-                    ? 'Selecionar (Ilimitado)'
-                    : 'Selecionar (1 Vaga na Sala)'
+                : isLockedByXp
+                  ? `Bloqueada — Requer Nv.${cls.requiredLevel}`
+                  : holderName
+                    ? `Travada por ${holderName}`
+                    : cls.unlimitedInRoom
+                      ? 'Selecionar (Ilimitado)'
+                      : 'Selecionar (1 Vaga na Sala)'
             }
           </button>
         </div>
