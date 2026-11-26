@@ -893,15 +893,15 @@ export class VillageScene extends Phaser.Scene {
       }
     }
 
-    // 4. Corpos Personalizados por Classe + VFX de Garras
+    // 4. Túmulos de Terra com Cruz onde o Lobisomem abateu um jogador + VFX de Garras
     const activeCorpseIds = new Set<string>();
     for (const corpse of this.snapshot.corpses) {
       activeCorpseIds.add(corpse.id);
       if (!this.corpseSprites.has(corpse.id)) {
-        const texKey = this.textures.exists(`corpse_${corpse.victimClass}_25d`)
-          ? `corpse_${corpse.victimClass}_25d`
-          : 'prop_corpse_25d';
-        const spr = this.add.image(corpse.x, corpse.y, texKey).setDepth(corpse.y - 5);
+        const spr = this.add
+          .image(corpse.x, corpse.y, 'prop_dirt_grave_cross_25d')
+          .setOrigin(0.5, 0.82)
+          .setDepth(corpse.y);
         this.corpseSprites.set(corpse.id, spr);
 
         const slash = this.add

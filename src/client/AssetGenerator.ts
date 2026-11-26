@@ -2724,9 +2724,12 @@ export class AssetGenerator {
         this.drawSeveredCorpse25D(ctx, cls.colorHex);
       });
     }
-    // Fallback padrão
-    this.createCanvas(scene, 'prop_corpse_25d', 88, 68, (ctx) => {
-      this.drawSeveredCorpse25D(ctx, '#64748b');
+    // Fallback padrão (Túmulo de Terra com Cruz no Mapa)
+    this.createCanvas(scene, 'prop_corpse_25d', 76, 82, (ctx) => {
+      this.drawDirtGraveCross25D(ctx);
+    });
+    this.createCanvas(scene, 'prop_dirt_grave_cross_25d', 76, 82, (ctx) => {
+      this.drawDirtGraveCross25D(ctx);
     });
 
     // 4. VFX de Rasgo Triplo de Garras no Mapa (110x110)
@@ -2842,6 +2845,102 @@ export class AssetGenerator {
       ctx.lineTo(cx - 7 + i * 5, cy + 9);
       ctx.stroke();
     }
+  }
+
+  /**
+   * Desenha um Túmulo de Terra Recém-Cavado com uma Cruz de Madeira Rústica 2.5D (76x82)
+   * que fica no mapa exatamente onde o Lobisomem abateu um jogador!
+   */
+  private static drawDirtGraveCross25D(ctx: CanvasRenderingContext2D) {
+    const cx = 38;
+
+    // 1. Sombra escura na base do monte de terra
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(cx, 66, 32, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Monte de Terra Recém-Revolvida (Camada Inferior e Superior em Marrom Terra Escuro)
+    const dirtGrad = ctx.createLinearGradient(cx, 44, cx, 72);
+    dirtGrad.addColorStop(0, '#6b4226');
+    dirtGrad.addColorStop(0.55, '#4a2c16');
+    dirtGrad.addColorStop(1, '#2b180b');
+    ctx.fillStyle = dirtGrad;
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 2.8;
+    ctx.beginPath();
+    ctx.moveTo(10, 66);
+    ctx.quadraticCurveTo(cx - 18, 44, cx, 44);
+    ctx.quadraticCurveTo(cx + 18, 44, 66, 66);
+    ctx.quadraticCurveTo(cx, 74, 10, 66);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Torrões e pedrinhas de terra solta sobre o túmulo
+    ctx.fillStyle = '#38200f';
+    [
+      { x: cx - 14, y: 60, rx: 5, ry: 2.5 },
+      { x: cx + 12, y: 58, rx: 6, ry: 2.8 },
+      { x: cx - 3, y: 64, rx: 7, ry: 2.6 },
+      { x: cx + 4, y: 53, rx: 4.5, ry: 2.2 }
+    ].forEach((clod) => {
+      ctx.beginPath();
+      ctx.ellipse(clod.x, clod.y, clod.rx, clod.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Pequenas pedras nas bordas da cova de terra
+    ctx.fillStyle = '#64748b';
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 1.8;
+    [
+      { x: 16, y: 65, r: 3.5 },
+      { x: 59, y: 65, r: 3.8 },
+      { x: 26, y: 68, r: 3 }
+    ].forEach((st) => {
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+
+    // 3. Cruz de Madeira Rústica Fincada no Topo do Túmulo de Terra (levemente inclinada)
+    ctx.save();
+    ctx.translate(cx, 48);
+    ctx.rotate(-0.06);
+
+    // Haste vertical da cruz de madeira
+    ctx.fillStyle = '#783f19';
+    ctx.strokeStyle = '#090d16';
+    ctx.lineWidth = 2.8;
+    ctx.beginPath();
+    ctx.roundRect(-5, -40, 10, 44, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Veio vertical da madeira
+    ctx.fillStyle = '#924e22';
+    ctx.fillRect(-2, -37, 3, 38);
+
+    // Trave horizontal da cruz
+    ctx.fillStyle = '#783f19';
+    ctx.beginPath();
+    ctx.roundRect(-18, -27, 36, 9, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Amarra de corda cruzada no centro da cruz
+    ctx.strokeStyle = '#d99b26';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-5, -27);
+    ctx.lineTo(5, -18);
+    ctx.moveTo(5, -27);
+    ctx.lineTo(-5, -18);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   private static createLightingMask(scene: Phaser.Scene) {
