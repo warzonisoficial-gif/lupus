@@ -2646,16 +2646,17 @@ export class AssetGenerator {
 
   private static createLightingMask(scene: Phaser.Scene) {
     // 1. Vinheta GPU ultra-leve (256x256) com centro transparente e bordas escuras suaves:
-    // 16x menos memória de vídeo que 1024x1024 com interpolação linear idêntica na GPU!
+    // O raio transparente central é mais focado para escurecer o campo de visão no Eclipse sem precisar
+    // diminuir o quadrado da imagem abaixo da largura da tela!
     this.createCanvas(scene, 'vignette_vision', 256, 256, (ctx, w, h) => {
       const cx = w / 2;
       const cy = h / 2;
-      const r = w * 0.48;
-      const grad = ctx.createRadialGradient(cx, cy, r * 0.25, cx, cy, r);
+      const r = w * 0.36;
+      const grad = ctx.createRadialGradient(cx, cy, r * 0.18, cx, cy, r);
       grad.addColorStop(0, 'rgba(3, 6, 14, 0)');
-      grad.addColorStop(0.45, 'rgba(3, 6, 14, 0.18)');
-      grad.addColorStop(0.75, 'rgba(3, 6, 14, 0.72)');
-      grad.addColorStop(1, 'rgba(3, 6, 14, 0.95)');
+      grad.addColorStop(0.38, 'rgba(3, 6, 14, 0.25)');
+      grad.addColorStop(0.72, 'rgba(3, 6, 14, 0.82)');
+      grad.addColorStop(1, 'rgba(3, 6, 14, 0.97)');
 
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);

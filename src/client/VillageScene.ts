@@ -143,12 +143,15 @@ export class VillageScene extends Phaser.Scene {
 
   private updateVignetteSize(w: number, h: number, isEclipse: boolean) {
     if (!this.visionVignette) return;
-    const maxDim = Math.max(w, h);
+    // A máscara da vinheta SEMPRE precisa cobrir no mínimo toda a largura e altura da tela (w, h),
+    // inclusive durante o Eclipse Lunar, para jamais deixar faixas claras sobrando nas laterais!
+    const coverW = Math.max(w, h) * 1.35;
+    const coverH = Math.max(w, h) * 1.35;
     if (isEclipse) {
-      this.visionVignette.setDisplaySize(maxDim * 0.92, maxDim * 0.92);
+      this.visionVignette.setDisplaySize(coverW, coverH);
       this.visionVignette.setAlpha(0.96);
     } else {
-      this.visionVignette.setDisplaySize(maxDim * 1.65, maxDim * 1.65);
+      this.visionVignette.setDisplaySize(coverW * 1.3, coverH * 1.3);
       this.visionVignette.setAlpha(0.55);
     }
   }
