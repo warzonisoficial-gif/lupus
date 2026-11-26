@@ -159,6 +159,7 @@ export interface PlayerState {
   isInvisibleEnd: number;
   isStunnedEnd: number;
   isRevealedEnd: number;
+  guiltSlowEnd: number; // Penalidade por votar em inocente: -30% velocidade, habilidade zerada e -50 XP
   hiddenInBarrelId: string | null; // ID do barril onde o jogador está escondido
   usedBarrelIds: string[];         // IDs dos barris/baús nos quais o jogador já entrou nesta partida (não pode entrar de novo no mesmo!)
   hiddenInTombId: string | null;   // ID da tumba do cemitério onde o Lobisomem está escondido

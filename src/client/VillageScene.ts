@@ -532,6 +532,7 @@ export class VillageScene extends Phaser.Scene {
 
       let speedPxPerSec = myPlayer.isAlive ? 480 : 560;
       if (myPlayer.isAlive && now < myPlayer.hasSpeedBuffEnd) speedPxPerSec *= 1.42;
+      if (myPlayer.isAlive && now < (myPlayer.guiltSlowEnd || 0)) speedPxPerSec *= 0.72; // Penalidade por votar em inocente
       if (myPlayer.isAlive && myPlayer.isWerewolf && myPlayer.isTransformed) {
         speedPxPerSec *= this.snapshot.phase === 'PHASE_3_BLOOD_MOON' ? 1.28 : 1.16;
       }
@@ -1023,8 +1024,9 @@ export class VillageScene extends Phaser.Scene {
 
       const topOffset = p.isTransformed ? 90 : 76;
       const stunLabel = now < p.isStunnedEnd ? ' (Atordoado)' : '';
+      const guiltLabel = now < (p.guiltSlowEnd || 0) ? ' [Penalizado]' : '';
       const missionTag = p.isPerformingMission ? ` [Missão ${Math.floor(p.missionProgress)}%]` : '';
-      node.nameTag.setText(`${p.name}${stunLabel}${missionTag}`);
+      node.nameTag.setText(`${p.name}${stunLabel}${guiltLabel}${missionTag}`);
       node.nameTag.setPosition(renderX, renderY - topOffset);
       node.nameTag.setColor(
         p.isTransformed

@@ -140,6 +140,7 @@ export class GameRoom {
       isInvisibleEnd: 0,
       isStunnedEnd: 0,
       isRevealedEnd: 0,
+      guiltSlowEnd: 0,
       hiddenInBarrelId: null,
       usedBarrelIds: [],
       hiddenInTombId: null,
@@ -268,6 +269,7 @@ export class GameRoom {
       p.hasEscapePassive = false;
       p.isStunnedEnd = 0;
       p.isInvisibleEnd = 0;
+      p.guiltSlowEnd = 0;
       p.hiddenInBarrelId = null;
       p.usedBarrelIds = [];
       p.hiddenInTombId = null;
@@ -341,6 +343,7 @@ export class GameRoom {
 
     let speed = 16.5;
     if (now < p.hasSpeedBuffEnd) speed *= 1.42; // Disparada +42%
+    if (now < p.guiltSlowEnd) speed *= 0.72; // Penalidade de Culpa por votar em inocente (-28% velocidade)
     if (p.isWerewolf && p.isTransformed) {
       speed *= this.phase === 'PHASE_3_BLOOD_MOON' ? 1.28 : 1.16;
     }
@@ -1199,6 +1202,35 @@ export class GameRoom {
     this.tribunal.turnEndsAt = Date.now() - 100;
   }
 
+  /**
+   * Aplica a Penalidade de Falsa Acusação sempre que um jogador vota em um INOCENTE:
+   * 1. Perde a habilidade desbloqueada e zera o progresso da missão (precisa refazer a missão).
+   * 2. Perde 50 XP da conta.
+   * 3. Recebe o peso da Culpa (-28% velocidade de movimento por 18s e revelação por 8s).
+   */
+  private applyInnocentVotePenalty(voter: PlayerState, innocentTarget: PlayerState, contextLabel: string) {
+    if (voter.isWerewolf) return;
+    const now = Date.now();
+    voter.abilityUnlocked = false;
+    voter.missionProgress = 0;
+    voter.isPerformingMission = false;
+    voter.totalXp = Math.max(0, voter.totalXp - 50);
+    voter.guiltSlowEnd = Math.max(voter.guiltSlowEnd, now + 18000);
+    voter.isRevealedEnd = Math.max(voter.isRevealedEnd, now + 8000);
+
+    if (this.tribunal) {
+      this.tribunal.chatMessages.push({
+        id: `chat_pen_${now}_${voter.id}`,
+        senderId: 'system',
+        senderName: 'Penalidade do Tribunal',
+        senderClass: 'juiz',
+        text: `${voter.name} votou em um inocente (${innocentTarget.name}) no ${contextLabel} e sofreu penalidade: Habilidade zerada, -50 XP e Lentidão de Culpa!`,
+        filtered: false,
+        timestamp: now
+      });
+    }
+  }
+
   private updateTribunalState(now: number) {
     if (!this.tribunal) return;
 
@@ -1230,8 +1262,14 @@ export class GameRoom {
       }
       for (const [voterId, targetId] of this.turn1Votes.entries()) {
         const voter = this.players.get(voterId);
+        const target = this.players.get(targetId);
         const weight = voter?.classId === 'juiz' && voter.abilityUnlocked ? 2 : 1;
         tally.set(targetId, (tally.get(targetId) || 0) + weight);
+
+        // Regra: Toda vez que alguém vota em um inocente (inclusive no Turno 1), recebe penalidade!
+        if (voter && target && !target.isWerewolf && voter.id !== target.id) {
+          this.applyInnocentVotePenalty(voter, target, 'Turno 1');
+        }
       }
 
       const sorted = Array.from(tally.entries()).sort((a, b) => b[1] - a[1]);
@@ -1300,14 +1338,29 @@ export class GameRoom {
     };
 
     const [idA, idB] = this.tribunal.finalists;
+    const finalistA = this.players.get(idA);
+    const finalistB = this.players.get(idB);
+
+    // Regra: Toda vez que alguém vota para executar um inocente no Veredito Final (mesmo que a maioria absolva),
+    // esse eleitor sofre a Penalidade de Falsa Acusação!
+    for (const [voterId, verdict] of this.turn3Votes.entries()) {
+      const voter = this.players.get(voterId);
+      if (!voter) continue;
+      if (verdict === 'A' && finalistA && !finalistA.isWerewolf) {
+        this.applyInnocentVotePenalty(voter, finalistA, 'Veredito Final');
+      } else if (verdict === 'B' && finalistB && !finalistB.isWerewolf) {
+        this.applyInnocentVotePenalty(voter, finalistB, 'Veredito Final');
+      }
+    }
+
     let executed: PlayerState | undefined;
     let executedSlot: 'A' | 'B' | null = null;
 
     if (countA > countB && countA > countAbsolve) {
-      executed = this.players.get(idA);
+      executed = finalistA;
       executedSlot = 'A';
     } else if (countB > countA && countB > countAbsolve) {
-      executed = this.players.get(idB);
+      executed = finalistB;
       executedSlot = 'B';
     }
 
@@ -1320,19 +1373,10 @@ export class GameRoom {
 
     // Execução com Tiro de Prata:
     if (!executed.isWerewolf) {
-      // 1. Se o executado for Inocente: morre, vira Fantasma e quem votou pela execução perde a habilidade ativa!
+      // 1. Se o executado for Inocente: morre, vira Fantasma e todos que votaram nele já receberam a penalidade!
       executed.isAlive = false;
-      for (const [voterId, verdict] of this.turn3Votes.entries()) {
-        if (verdict === executedSlot) {
-          const guiltyVoter = this.players.get(voterId);
-          if (guiltyVoter && !guiltyVoter.isWerewolf) {
-            guiltyVoter.abilityUnlocked = false;
-            guiltyVoter.missionProgress = 0;
-          }
-        }
-      }
       this.addLog(
-        `TIRO DE PRATA: ${executed.name} era INOCENTE! Quem votou pela execução perdeu sua habilidade ativa!`
+        `TIRO DE PRATA: ${executed.name} era INOCENTE! Quem votou contra um inocente sofreu penalidade (-50 XP, habilidade zerada e lentidão de culpa)!`
       );
       this.tribunal = null;
       this.phase = 'PHASE_1_HUNT';
