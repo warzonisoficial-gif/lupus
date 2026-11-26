@@ -14,9 +14,9 @@
       <!-- Canvas Phaser 3 em Tela Cheia -->
       <div id="phaser-container"></div>
 
-      <!-- HUD Superior Unificado e Alinhado (Estilo Jogo Mobile/PC Profissional) -->
+      <!-- HUD Superior Unificado e Alinhado (Com Lua Cheia Visual no Centro) -->
       <header id="top-hud">
-        <!-- Esquerda: 1 Único Card Integrado (Retrato + Classe + Barra de Missão) -->
+        <!-- Esquerda: 1 Único Card Integrado (Retrato + Classe + Barra de Missão + Passiva Escape Embutida) -->
         <div class="hud-left-group">
           <div class="hud-unified-player-card">
             <div class="hud-avatar-frame">
@@ -44,35 +44,35 @@
                   <span></span><span></span><span></span>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Passiva ESCAPE compacta (aparece acoplada apenas quando for o Lobisomem) -->
-          <div id="werewolf-escape-box" class="hud-wolf-escape-pill hidden">
-            <div class="escape-pill-header">
-              <span>ESCAPE</span>
-              <strong id="escape-status-text">0/2</strong>
-            </div>
-            <div class="game-gauge-track slim-track">
-              <div id="escape-bar" class="game-gauge-fill wolf-fill" style="width: 0%"></div>
+              <!-- Passiva ESCAPE embutida dentro do mesmo card (jamais empurra ou sobrepõe a Lua central!) -->
+              <div id="werewolf-escape-box" class="embedded-escape-row hidden">
+                <div class="embedded-escape-label">
+                  <span>ESCAPE</span>
+                  <strong id="escape-status-text">0/2</strong>
+                </div>
+                <div class="game-gauge-track slim-track">
+                  <div id="escape-bar" class="game-gauge-fill wolf-fill" style="width: 0%"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Centro: Barra Horizontal Única de Status da Partida (Sem quebrar linhas!) -->
-        <div class="hud-center-status-bar">
-          <span id="hud-phase-badge" class="phase-crest">FASE 1: INVESTIGAÇÃO</span>
-          <span class="status-divider"></span>
-          <span id="hud-timer" class="metric-item">04:00</span>
-          <span class="status-divider"></span>
-          <span id="hud-eclipse" class="metric-eclipse">Lua Clara (30s)</span>
-          <span id="hud-bell-wrap" class="hidden">
-            <span class="status-divider"></span>
-            <span id="hud-bell-hp" class="metric-item">Sino: 500 HP</span>
-          </span>
+        <!-- Centro: Medalhão Visual da Lua Cheia (Carrega / Eclipsa / Diminui visualmente no lugar de números) -->
+        <div class="hud-moon-centerpiece">
+          <div class="moon-dial-wrapper">
+            <canvas id="hud-moon-canvas" width="68" height="68"></canvas>
+          </div>
+          <div class="moon-caption-stack">
+            <span id="hud-phase-badge" class="moon-phase-caption">LUA CLARA</span>
+            <span id="hud-bell-wrap" class="moon-bell-badge hidden">
+              <span id="hud-bell-hp">Sino: 500 HP</span>
+            </span>
+          </div>
         </div>
 
-        <!-- Direita: Botões de Ação do Topo Alinhados na Mesma Altura (Sem quebrar texto!) -->
+        <!-- Direita: Botões de Ação do Topo Alinhados na Mesma Altura -->
         <div class="hud-right-actions">
           <span id="hud-account-xp" class="hud-xp-badge">15.000 XP</span>
           <button id="btn-open-classes" class="btn-hud-pill">

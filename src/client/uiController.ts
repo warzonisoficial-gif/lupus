@@ -338,29 +338,20 @@ export class UIController {
   private updateTopHud(snap: WorldSnapshot, me: PlayerState | null) {
     const phaseBadge = document.getElementById('hud-phase-badge');
     if (phaseBadge) {
-      const labels: Record<string, string> = {
-        LOBBY: 'AGUARDANDO',
-        PHASE_1_HUNT: 'FASE 1: CAÇA',
-        PHASE_2_TRIBUNAL: 'FASE 2: TRIBUNAL',
-        PHASE_3_BLOOD_MOON: 'FASE 3: LUA DE SANGUE',
-        POST_GAME: 'RODA DA VITÓRIA'
-      };
-      phaseBadge.textContent = labels[snap.phase] || snap.phase;
+      if (snap.phase === 'PHASE_1_HUNT') {
+        phaseBadge.textContent = snap.eclipseActive ? 'ECLIPSE LUNAR' : 'LUA CLARA';
+      } else if (snap.phase === 'PHASE_2_TRIBUNAL') {
+        phaseBadge.textContent = 'TRIBUNAL DA IGREJA';
+      } else if (snap.phase === 'PHASE_3_BLOOD_MOON') {
+        phaseBadge.textContent = 'LUA DE SANGUE';
+      } else if (snap.phase === 'POST_GAME') {
+        phaseBadge.textContent = 'FIM DA CAÇADA';
+      } else {
+        phaseBadge.textContent = 'VILAREJO';
+      }
     }
 
-    const timerEl = document.getElementById('hud-timer');
-    if (timerEl) {
-      const m = Math.floor(snap.phaseTimerSec / 60);
-      const s = snap.phaseTimerSec % 60;
-      timerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    }
-
-    const eclipseEl = document.getElementById('hud-eclipse');
-    if (eclipseEl) {
-      eclipseEl.textContent = snap.eclipseActive
-        ? `ECLIPSE (${snap.eclipseRemainingSec}s)`
-        : `Lua Clara (${snap.eclipseRemainingSec}s)`;
-    }
+    this.drawMoonPhaseDial(snap);
 
     const bellWrap = document.getElementById('hud-bell-wrap');
     const bellEl = document.getElementById('hud-bell-hp');
@@ -390,6 +381,143 @@ export class UIController {
         }
       }
     }
+  }
+
+  /**
+   * Desenha uma Lua Cheia visual no topo central do HUD que vai carregando,
+   * eclipsando (sombra cobrindo o disco lunar) ou esvaziando na Lua de Sangue,
+   * substituindo contadores numéricos por um relógio lunar atmosférico.
+   */
+  private drawMoonPhaseDial(snap: WorldSnapshot) {
+    const canvas = document.getElementById('hud-moon-canvas') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const moonR = 22;
+    const ringR = 29;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Calcula a fração de progresso (0 a 1) do ciclo atual sem precisar exibir números
+    let progress = 1;
+    let ringColor = '#e9c46a';
+    let isBloodMoon = snap.phase === 'PHASE_3_BLOOD_MOON';
+    let isEclipse = snap.phase === 'PHASE_1_HUNT' && snap.eclipseActive;
+
+    if (snap.phase === 'PHASE_1_HUNT') {
+      if (snap.eclipseActive) {
+        // Durante o Eclipse (15s): o anel âmbar esvazia enquanto a sombra cobre a lua
+        progress = Math.max(0, Math.min(1, snap.eclipseRemainingSec / 15));
+        ringColor = '#d99b43';
+      } else {
+        // Durante a Lua Clara (30s): a lua vai carregando até o próximo Eclipse
+        progress = Math.max(0, Math.min(1, (30 - snap.eclipseRemainingSec) / 30));
+        ringColor = '#f3e3b2';
+      }
+    } else if (snap.phase === 'PHASE_3_BLOOD_MOON') {
+      // Lua de Sangue (90s): o anel rubro vai diminuindo conforme o tempo final se esgota
+      progress = Math.max(0, Math.min(1, snap.phaseTimerSec / 90));
+      ringColor = '#ef4444';
+    } else if (snap.phase === 'PHASE_2_TRIBUNAL') {
+      const turn = snap.tribunal?.turn || 'TURN_1_SECRET_VOTE';
+      const maxTurn = turn === 'TURN_1_SECRET_VOTE' ? 45 : turn === 'TURN_2_DEFENSE' ? 20 : 15;
+      progress = Math.max(0, Math.min(1, snap.phaseTimerSec / maxTurn));
+      ringColor = '#d99b43';
+    }
+
+    // 1. Halo externo suave ao redor da Lua
+    const glowGrad = ctx.createRadialGradient(cx, cy, moonR * 0.5, cx, cy, ringR + 4);
+    if (isBloodMoon) {
+      glowGrad.addColorStop(0, 'rgba(220, 38, 38, 0.45)');
+      glowGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+    } else if (isEclipse) {
+      glowGrad.addColorStop(0, 'rgba(217, 155, 67, 0.38)');
+      glowGrad.addColorStop(1, 'rgba(217, 155, 67, 0)');
+    } else {
+      glowGrad.addColorStop(0, 'rgba(245, 232, 196, 0.35)');
+      glowGrad.addColorStop(1, 'rgba(245, 232, 196, 0)');
+    }
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR + 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Disco principal da Lua Cheia
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, moonR, 0, Math.PI * 2);
+    ctx.clip();
+
+    const moonGrad = ctx.createRadialGradient(cx - 6, cy - 6, 3, cx, cy, moonR);
+    if (isBloodMoon) {
+      moonGrad.addColorStop(0, '#fca5a5');
+      moonGrad.addColorStop(0.55, '#dc2626');
+      moonGrad.addColorStop(1, '#7f1d1d');
+    } else {
+      moonGrad.addColorStop(0, '#fffdf5');
+      moonGrad.addColorStop(0.65, '#eddca8');
+      moonGrad.addColorStop(1, '#bfa56b');
+    }
+    ctx.fillStyle = moonGrad;
+    ctx.fillRect(cx - moonR, cy - moonR, moonR * 2, moonR * 2);
+
+    // Crateras sutis da superfície lunar
+    ctx.fillStyle = isBloodMoon ? 'rgba(69, 10, 10, 0.35)' : 'rgba(138, 114, 68, 0.26)';
+    const craters = [
+      { x: cx - 7, y: cy - 5, r: 4.5 },
+      { x: cx + 8, y: cy - 3, r: 6 },
+      { x: cx - 3, y: cy + 8, r: 5 },
+      { x: cx + 6, y: cy + 9, r: 3.2 }
+    ];
+    for (const c of craters) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Sombra do Eclipse avançando gradualmente sobre a Lua Cheia
+    if (isEclipse) {
+      // Durante o Eclipse Total, a sombra umbral cobre quase todo o disco lunar deixando a coroa dourada
+      ctx.fillStyle = 'rgba(7, 10, 8, 0.92)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, moonR - 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (snap.phase === 'PHASE_1_HUNT') {
+      // Durante a Lua Clara, a sombra vai se aproximando aos poucos pela lateral conforme carrega para o Eclipse
+      const shadowOffset = (1 - progress) * (moonR * 1.85);
+      ctx.fillStyle = 'rgba(7, 11, 8, 0.78)';
+      ctx.beginPath();
+      ctx.arc(cx + shadowOffset + 5, cy - 2, moonR * 1.02, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (isBloodMoon) {
+      // Na Lua de Sangue, a escuridão vai tomando a lua de cima para baixo conforme o tempo se esgota
+      const drainHeight = (1 - progress) * (moonR * 2);
+      ctx.fillStyle = 'rgba(8, 5, 5, 0.65)';
+      ctx.fillRect(cx - moonR, cy - moonR, moonR * 2, drainHeight);
+    }
+    ctx.restore();
+
+    // 4. Trilho externo do anel lunar
+    ctx.strokeStyle = 'rgba(92, 61, 36, 0.45)';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 5. Arco luminoso de carregamento / diminuição do tempo da Lua
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + Math.PI * 2 * progress;
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, startAngle, endAngle);
+    ctx.stroke();
   }
 
   /**
