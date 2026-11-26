@@ -85,8 +85,8 @@ export class GameRoom {
 
   private tribunal: TribunalState | null = null;
   private tribunalStartedAt: number = 0;
-  private turn1Votes: Map<string, string> = new Map(); // voterId -> targetId
-  private turn3Votes: Map<string, 'A' | 'B' | 'ABSOLVE'> = new Map();
+  private turn1Votes: Map<string, string> = new Map(); // voterId -> targetId ou 'BLANK'
+  private turn3Votes: Map<string, 'A' | 'B' | 'ABSOLVE' | 'BLANK'> = new Map();
 
   private winner: 'VILLAGE' | 'WEREWOLF' | null = null;
   private winReason: string | null = null;
@@ -2000,7 +2000,8 @@ export class GameRoom {
   }
 
   /**
-   * Turno 1 (Voto Secreto) e Turno 3 (Veredito Final: Executar A, Executar B ou Absolver Ambos)
+   * Turno 1 (Voto Secreto ou Voto em Branco 'BLANK') e Turno 3 (Veredito Final: Executar A, Executar B, Absolver Ambos ou Voto em Branco 'BLANK')
+   * Votar em Branco ('BLANK') NUNCA aplica penalidade de voto em inocente!
    */
   public handleTribunalVote(voterId: string, choice: string) {
     if (this.phase !== 'PHASE_2_TRIBUNAL' || !this.tribunal) return;
@@ -2008,12 +2009,12 @@ export class GameRoom {
     if (!voter || !voter.isAlive) return;
 
     if (this.tribunal.turn === 'TURN_1_SECRET_VOTE') {
-      if (this.players.has(choice)) {
+      if (choice === 'BLANK' || this.players.has(choice)) {
         this.turn1Votes.set(voterId, choice);
         this.tribunal.turn1VotesCount = this.turn1Votes.size;
       }
     } else if (this.tribunal.turn === 'TURN_3_FINAL_VERDICT') {
-      if (choice === 'A' || choice === 'B' || choice === 'ABSOLVE') {
+      if (choice === 'A' || choice === 'B' || choice === 'ABSOLVE' || choice === 'BLANK') {
         this.turn3Votes.set(voterId, choice);
       }
     }
@@ -2106,15 +2107,34 @@ export class GameRoom {
     if (now < this.tribunal.turnEndsAt) return;
 
     if (this.tribunal.turn === 'TURN_1_SECRET_VOTE') {
-      // Calcula os 2 jogadores mais votados (Juiz tem peso 2)
+      // Calcula os 2 jogadores mais votados (Juiz tem peso 2; votos em branco 'BLANK' contam apenas para anular acusações)
       const tally = new Map<string, number>();
       for (const p of this.players.values()) {
         if (p.isAlive) tally.set(p.id, 0);
       }
+      let blankWeight = 0;
+      let acusationWeight = 0;
       for (const [voterId, targetId] of this.turn1Votes.entries()) {
         const voter = this.players.get(voterId);
         const weight = voter?.classId === 'juiz' && voter.abilityUnlocked ? 2 : 1;
-        tally.set(targetId, (tally.get(targetId) || 0) + weight);
+        if (targetId === 'BLANK') {
+          blankWeight += weight;
+        } else {
+          acusationWeight += weight;
+          tally.set(targetId, (tally.get(targetId) || 0) + weight);
+        }
+      }
+
+      // Se a maioria (ou totalidade) votou em BRANCO e ninguém recebeu acusação válida, encerra o Tribunal sem acusados no Altar!
+      if (acusationWeight === 0 || blankWeight > acusationWeight) {
+        const pausedDurationMs = this.tribunalStartedAt > 0 ? Date.now() - this.tribunalStartedAt : 0;
+        this.addLog(
+          `Maioria de VOTOS EM BRANCO no Turno 1 (${blankWeight} em branco). Ninguém foi levado ao Altar e a caçada recomeça!`
+        );
+        this.phaseStartedAt += pausedDurationMs;
+        this.phase = 'PHASE_1_HUNT';
+        this.tribunal = null;
+        return;
       }
 
       const sorted = Array.from(tally.entries()).sort((a, b) => b[1] - a[1]);

@@ -763,6 +763,18 @@ body {
   margin-bottom: 8px;
 }
 
+.tribunal-turn1-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tribunal-turn1-top-bar .section-hint {
+  margin-bottom: 0;
+}
+
 .suspects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));

@@ -473,6 +473,15 @@ export class UIController {
       );
     });
 
+    document.getElementById('btn-vote-blank-turn1')?.addEventListener('click', () => {
+      this.selectedTurn1Suspect = 'BLANK';
+      this.socket.emit('tribunal_vote', 'BLANK');
+      this.showToast('Voto em Branco registrado no Turno 1 (Sem penalidade)!');
+      if (this.latestSnapshot) {
+        this.renderTurn1Suspects(this.latestSnapshot);
+      }
+    });
+
     document.getElementById('btn-verdict-a')?.addEventListener('click', () => {
       this.socket.emit('tribunal_vote', 'A');
       this.showToast('Voto registrado: Executar Acusado A');
@@ -486,6 +495,11 @@ export class UIController {
     document.getElementById('btn-verdict-absolve')?.addEventListener('click', () => {
       this.socket.emit('tribunal_vote', 'ABSOLVE');
       this.showToast('Voto registrado: Absolver Ambos');
+    });
+
+    document.getElementById('btn-verdict-blank')?.addEventListener('click', () => {
+      this.socket.emit('tribunal_vote', 'BLANK');
+      this.showToast('Voto em Branco registrado no Veredito Final (Sem penalidade)!');
     });
 
     document.getElementById('btn-close-wheel')?.addEventListener('click', () => {
@@ -1397,6 +1411,15 @@ export class UIController {
   private renderTurn1Suspects(snap: WorldSnapshot) {
     const grid = document.getElementById('tribunal-suspects-grid');
     if (!grid) return;
+
+    const blankBtn = document.getElementById('btn-vote-blank-turn1');
+    if (blankBtn) {
+      const isBlankVoted = this.selectedTurn1Suspect === 'BLANK';
+      blankBtn.textContent = isBlankVoted
+        ? 'Votado em Branco (Confirmado)'
+        : 'Votar em Branco (Sem Penalidade)';
+      blankBtn.className = isBlankVoted ? 'btn-primary btn-sm' : 'btn-secondary btn-sm';
+    }
 
     const alivePlayers = snap.players.filter((p) => p.isAlive);
     grid.innerHTML = alivePlayers
