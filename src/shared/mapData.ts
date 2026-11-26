@@ -429,6 +429,17 @@ export function isPointInChurchSacredGround(x: number, y: number): boolean {
   return dx * dx + dy * dy <= 1;
 }
 
+export function isPointInCornfield(x: number, y: number): boolean {
+  const cornZone = VILLAGE_ZONES.find((z) => z.id === 'milharal');
+  return Boolean(
+    cornZone &&
+      x >= cornZone.x + 35 &&
+      x <= cornZone.x + cornZone.width - 35 &&
+      y >= cornZone.y + 45 &&
+      y <= cornZone.y + cornZone.height - 35
+  );
+}
+
 /**
  * Verifica se o boneco do jogador deve ficar oculto pelo cenário:
  * 1. Dentro do Milharal Alto (Fazenda Sudoeste)
@@ -446,14 +457,7 @@ export function isPlayerHiddenByEnvironment(x: number, y: number): boolean {
   }
 
   // 2. Dentro da plantação do Milharal Alto
-  const cornZone = VILLAGE_ZONES.find((z) => z.id === 'milharal');
-  if (
-    cornZone &&
-    x >= cornZone.x + 35 &&
-    x <= cornZone.x + cornZone.width - 35 &&
-    y >= cornZone.y + 45 &&
-    y <= cornZone.y + cornZone.height - 35
-  ) {
+  if (isPointInCornfield(x, y)) {
     return true;
   }
 

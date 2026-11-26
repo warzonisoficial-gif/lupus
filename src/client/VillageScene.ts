@@ -17,6 +17,7 @@ import {
   isPlayerHiddenByEnvironment,
   isOnPathOrClearing,
   isPointInChurchSacredGround,
+  isPointInCornfield,
   isPointInRunicCircle,
   isPointInShallowLake,
   isPointInZone,
@@ -36,6 +37,8 @@ interface PlayerVisualNode {
   animFrame: number;
   facingLeft: boolean;
   wasAbilityUnlocked: boolean;
+  lastRustleX: number;
+  lastRustleY: number;
 }
 
 export class VillageScene extends Phaser.Scene {
@@ -69,6 +72,8 @@ export class VillageScene extends Phaser.Scene {
 
   private overlayGraphics!: Phaser.GameObjects.Graphics;
   private visionVignette!: Phaser.GameObjects.Image;
+  private cornfieldChunkSprite!: Phaser.GameObjects.Image;
+  private lastCornRustleSpawnAt: number = 0;
 
   private playerNodes: Map<string, PlayerVisualNode> = new Map();
   private totemSprites: Map<string, Phaser.GameObjects.Image> = new Map();
@@ -236,7 +241,12 @@ export class VillageScene extends Phaser.Scene {
     }
 
     // 7. TERRITÓRIO SUDOESTE (MECÂNICA DO MILHARAL ALTO): Fazenda do Milharal (700, 2190)
-    this.add.image(700, 2190, 'chunk_cornfield_25d').setScale(2).setDepth(3700);
+    // Moradores e o Lobo em forma humana entram escondidos SEM mexer a plantação;
+    // APENAS o Lobisomem TRANSFORMADO faz o milharal balançar quando se move lá dentro!
+    this.cornfieldChunkSprite = this.add
+      .image(700, 2190, 'chunk_cornfield_25d')
+      .setScale(2)
+      .setDepth(3700);
     this.add.image(1050, 1980, 'prop_scarecrow_25d').setOrigin(0.5, 0.88).setDepth(1980);
     this.add.image(365, 1940, 'prop_haybale_25d').setOrigin(0.5, 0.85).setDepth(1940);
 
@@ -796,6 +806,10 @@ export class VillageScene extends Phaser.Scene {
 
     // 6. Personagens 2.5D Animados
     const activePlayerIds = new Set<string>();
+    let transformedWolfMovingInCorn = false;
+    let wolfCornX = 700;
+    let wolfCornY = 2190;
+
     for (const p of this.snapshot.players) {
       activePlayerIds.add(p.id);
       const isSelf = myPlayer?.id === p.id;
@@ -839,7 +853,9 @@ export class VillageScene extends Phaser.Scene {
           animTimer: 0,
           animFrame: 0,
           facingLeft: false,
-          wasAbilityUnlocked: p.abilityUnlocked
+          wasAbilityUnlocked: p.abilityUnlocked,
+          lastRustleX: p.x,
+          lastRustleY: p.y
         };
         this.playerNodes.set(p.id, node);
       }
@@ -859,6 +875,20 @@ export class VillageScene extends Phaser.Scene {
       // no Milharal Alto, no Bosque de Caça do Sul, embaixo da Ponte do Rio OU se é o Lobisomem dentro da Floresta Densa!
       const checkX = isSelf ? this.predictedX : p.x;
       const checkY = isSelf ? this.predictedY : p.y;
+
+      // REGRA DO MILHARAL: Moradores e o Lobo em forma humana NÃO mexem o milharal!
+      // APENAS o Lobisomem TRANSFORMADO (p.isTransformed) mexendo-se dentro do milharal faz a plantação balançar!
+      const rustleMovedDist = Math.hypot(checkX - node.lastRustleX, checkY - node.lastRustleY);
+      node.lastRustleX = checkX;
+      node.lastRustleY = checkY;
+
+      if (p.isAlive && p.isTransformed && isPointInCornfield(checkX, checkY)) {
+        if (rustleMovedDist > 0.35) {
+          transformedWolfMovingInCorn = true;
+          wolfCornX = checkX;
+          wolfCornY = checkY;
+        }
+      }
       const inDenseForest = !isOnPathOrClearing(checkX, checkY);
       const hiddenByLandmark = isPlayerHiddenByEnvironment(checkX, checkY);
 
@@ -988,6 +1018,51 @@ export class VillageScene extends Phaser.Scene {
         node.shieldRing.destroy();
         node.nameTag.destroy();
         this.playerNodes.delete(id);
+      }
+    }
+
+    // Atualiza a agitação do Milharal: SOMENTE se o Lobisomem TRANSFORMADO estiver se movendo lá dentro!
+    if (this.cornfieldChunkSprite) {
+      if (transformedWolfMovingInCorn) {
+        const shakeX = Math.sin(now * 0.045) * 4.5;
+        const shakeY = Math.cos(now * 0.038) * 2.5;
+        const tiltDeg = Math.sin(now * 0.04) * 0.9;
+        this.cornfieldChunkSprite.setPosition(700 + shakeX, 2190 + shakeY);
+        this.cornfieldChunkSprite.setAngle(tiltDeg);
+
+        // Ondas de folhas e pés de milho chacoalhando exatamente onde a fera transformada está passando
+        const rustleRadius = 32 + Math.sin(now * 0.025) * 10;
+        this.overlayGraphics.lineStyle(3, 0xeab308, 0.72);
+        this.overlayGraphics.strokeEllipse(
+          wolfCornX,
+          wolfCornY - 18,
+          rustleRadius * 1.9,
+          rustleRadius * 1.15
+        );
+
+        if (now - this.lastCornRustleSpawnAt > 150) {
+          this.lastCornRustleSpawnAt = now;
+          const stalk = this.add
+            .image(
+              wolfCornX + (Math.random() - 0.5) * 34,
+              wolfCornY + (Math.random() - 0.5) * 20,
+              'prop_corn_25d'
+            )
+            .setOrigin(0.5, 0.9)
+            .setDepth(3720);
+          this.tweens.add({
+            targets: stalk,
+            angle: { from: -14, to: 14 },
+            yoyo: true,
+            repeat: 1,
+            alpha: { from: 0.95, to: 0 },
+            duration: 210,
+            onComplete: () => stalk.destroy()
+          });
+        }
+      } else {
+        this.cornfieldChunkSprite.setPosition(700, 2190);
+        this.cornfieldChunkSprite.setAngle(0);
       }
     }
   }
