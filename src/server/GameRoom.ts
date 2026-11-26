@@ -1635,7 +1635,8 @@ export class GameRoom {
   private executeWerewolfAttack(wolf: PlayerState): { ok: boolean; message: string } {
     const now = Date.now();
     if (now < wolf.abilityCooldownEnd) {
-      return { ok: false, message: 'Garras em recarga!' };
+      const remSec = Math.max(1, Math.ceil((wolf.abilityCooldownEnd - now) / 1000));
+      return { ok: false, message: `Garras em recarga! Aguarde ${remSec}s para atacar novamente.` };
     }
 
     const victim = this.findNearestPlayer(wolf, 105);
@@ -1695,7 +1696,8 @@ export class GameRoom {
       return { ok: false, message: 'Nenhuma presa ao alcance das garras.' };
     }
 
-    const attackCooldown = this.phase === 'PHASE_3_BLOOD_MOON' ? 16500 : 23000;
+    // O Lobisomem só pode atacar outro jogador após 15 segundos de recarga (15000ms) desde o último ataque!
+    const attackCooldown = 15000;
     wolf.abilityCooldownEnd = now + attackCooldown;
 
     // Verifica se a vítima possui Bênção Protetora (Freira) -> Fuga Invisível do Lobisomem

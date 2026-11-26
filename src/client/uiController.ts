@@ -1271,11 +1271,18 @@ export class UIController {
 
     if (me.isWerewolf && me.isTransformed) {
       btnAbility?.classList.remove('hidden');
+      const remWolfCdSec = Math.max(0, Math.ceil((me.abilityCooldownEnd - Date.now()) / 1000));
       if (abilityTitle) {
         abilityTitle.textContent =
-          snap.phase === 'PHASE_3_BLOOD_MOON' ? 'GARRAS' : 'ATACAR';
+          remWolfCdSec > 0
+            ? `${remWolfCdSec}s`
+            : snap.phase === 'PHASE_3_BLOOD_MOON'
+              ? 'GARRAS'
+              : 'ATACAR';
       }
-      if (abilityCharges) abilityCharges.textContent = 'LOBO';
+      if (abilityCharges) {
+        abilityCharges.textContent = remWolfCdSec > 0 ? 'RECARGA' : 'LOBO';
+      }
     } else if (me.abilityUnlocked && me.abilityCharges > 0) {
       btnAbility?.classList.remove('hidden');
       if (abilityTitle) {
