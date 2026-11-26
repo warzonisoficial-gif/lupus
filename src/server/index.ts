@@ -92,6 +92,14 @@ io.on('connection', (socket) => {
     mainRoom.handleTribunalVote(socket.id, choice);
   });
 
+  socket.on(
+    'tribunal_chat',
+    (text: string, cb?: (res: { ok: boolean; filtered?: boolean; message?: string }) => void) => {
+      const res = mainRoom.handleTribunalChat(socket.id, text);
+      if (cb) cb(res);
+    }
+  );
+
   socket.on('tribunal_skip_turn', () => {
     mainRoom.advanceTribunalTurnNow();
   });

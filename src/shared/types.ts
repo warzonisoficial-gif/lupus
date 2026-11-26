@@ -172,6 +172,16 @@ export interface PlayerState {
   totalXp: number;
 }
 
+export interface TribunalChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderClass: ClassId;
+  text: string;
+  filtered: boolean;
+  timestamp: number;
+}
+
 export interface TribunalState {
   active: boolean;
   turn: TribunalTurn;
@@ -188,6 +198,7 @@ export interface TribunalState {
     absolve: number;
   };
   outcomeBanner?: string;
+  chatMessages: TribunalChatMessage[];
 }
 
 export interface WorldSnapshot {

@@ -24,6 +24,7 @@ export class UIController {
   private lastPortraitClass: string = '';
   private lastKillFeedTopId: string = '';
   private lastTribunalTurnRendered: string = '';
+  private lastTribunalChatLastId: string = '';
   private wasLocalPlayerAlive: boolean = true;
 
   private wheelAngleDeg: number = 0;
@@ -270,6 +271,25 @@ export class UIController {
 
     document.getElementById('btn-skip-tribunal-turn')?.addEventListener('click', () => {
       this.socket.emit('tribunal_skip_turn');
+    });
+
+    document.getElementById('tribunal-chat-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('tribunal-chat-input') as HTMLInputElement | null;
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      this.socket.emit(
+        'tribunal_chat',
+        text,
+        (res?: { ok: boolean; filtered?: boolean; message?: string }) => {
+          if (res?.message) {
+            this.showToast(res.message);
+          }
+        }
+      );
     });
 
     document.getElementById('btn-verdict-a')?.addEventListener('click', () => {
@@ -776,11 +796,13 @@ export class UIController {
       modal.classList.add('hidden');
       this.selectedTurn1Suspect = null;
       this.lastTribunalTurnRendered = '';
+      this.lastTribunalChatLastId = '';
       return;
     }
 
     modal.classList.remove('hidden');
     const trib = snap.tribunal;
+    this.renderTribunalChat(trib.chatMessages || []);
 
     const turnBadge = document.getElementById('tribunal-turn-badge');
     const countdown = document.getElementById('tribunal-countdown');
@@ -827,6 +849,47 @@ export class UIController {
         verdictActions?.classList.remove('hidden');
       }
     }
+  }
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private renderTribunalChat(messages: NonNullable<WorldSnapshot['tribunal']>['chatMessages']) {
+    const box = document.getElementById('tribunal-chat-messages');
+    if (!box) return;
+
+    const lastId = messages[messages.length - 1]?.id || 'empty';
+    if (lastId === this.lastTribunalChatLastId) return;
+    this.lastTribunalChatLastId = lastId;
+
+    box.innerHTML = messages
+      .map((msg) => {
+        const isSys = msg.senderId === 'system';
+        const roleName = isSys
+          ? 'MODERADOR'
+          : CLASSES_BY_ID[msg.senderClass]?.name || 'Morador';
+        const censoredBadge = msg.filtered
+          ? `<span class="tribunal-chat-censored">[Filtro de ofensas]</span>`
+          : '';
+        return `
+          <div class="tribunal-chat-item ${isSys ? 'chat-system' : ''}">
+            <div class="tribunal-chat-author">
+              <span>${this.escapeHtml(msg.senderName)}${censoredBadge}</span>
+              <span class="tribunal-chat-role">${this.escapeHtml(roleName)}</span>
+            </div>
+            <div class="tribunal-chat-text">${this.escapeHtml(msg.text)}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    box.scrollTop = box.scrollHeight;
   }
 
   private renderTurn1Suspects(snap: WorldSnapshot) {

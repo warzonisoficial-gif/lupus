@@ -23,6 +23,7 @@ import {
   resolveMapCollisions
 } from '../shared/mapData';
 import { XP_REWARDS, evaluateVictoryWheelAngle } from '../shared/progressionData';
+import { sanitizeTribunalChatMessage } from '../shared/profanityFilter';
 import {
   BarricadeEntity,
   ClassId,
@@ -31,6 +32,7 @@ import {
   PlayerState,
   TotemPoint,
   TrapEntity,
+  TribunalChatMessage,
   TribunalState,
   WorldSnapshot
 } from '../shared/types';
@@ -1034,6 +1036,33 @@ export class GameRoom {
         ? suspectClues
         : this.getRecentSuspectsNear(CHURCH_CENTER.x, CHURCH_CENTER.y, 15000);
 
+    const initialChat: TribunalChatMessage[] = [
+      {
+        id: `chat_sys_${Date.now()}`,
+        senderId: 'system',
+        senderName: 'Inquisição da Vila',
+        senderClass: 'inquisidor',
+        text: `Tribunal convocado por ${reporterName}. Discutam as pistas com respeito (Filtro de ofensas ativo).`,
+        filtered: false,
+        timestamp: Date.now()
+      }
+    ];
+
+    if (autoClues.length > 0) {
+      const botReporter = alivePlayers.find((b) => b.isBot);
+      if (botReporter) {
+        initialChat.push({
+          id: `chat_bot_${Date.now()}_1`,
+          senderId: botReporter.id,
+          senderName: botReporter.name,
+          senderClass: botReporter.classId,
+          text: `Olhem o relatório de pistas: ${autoClues.join(', ')} estavam perto do local nos últimos 15s!`,
+          filtered: false,
+          timestamp: Date.now()
+        });
+      }
+    }
+
     this.tribunal = {
       active: true,
       turn: 'TURN_1_SECRET_VOTE',
@@ -1043,10 +1072,57 @@ export class GameRoom {
       corpseLocation,
       suspectClues: autoClues,
       turn1VotesCount: 0,
-      finalists: null
+      finalists: null,
+      chatMessages: initialChat
     };
 
     this.addLog(`TRIBUNAL DA IGREJA: ${reason}`);
+  }
+
+  /**
+   * Envia mensagem no Chat do Tribunal com Filtro Automático de Ofensas
+   */
+  public handleTribunalChat(
+    senderId: string,
+    rawText: string
+  ): { ok: boolean; filtered?: boolean; message?: string } {
+    if (this.phase !== 'PHASE_2_TRIBUNAL' || !this.tribunal) {
+      return { ok: false, message: 'O chat só fica aberto durante a votação do Tribunal.' };
+    }
+    const sender = this.players.get(senderId);
+    if (!sender) {
+      return { ok: false, message: 'Jogador não encontrado.' };
+    }
+    if (!sender.isAlive) {
+      return { ok: false, message: 'Fantasmas não podem falar no Tribunal dos vivos!' };
+    }
+
+    const { cleanText, wasFiltered } = sanitizeTribunalChatMessage(rawText || '');
+    if (!cleanText) {
+      return { ok: false, message: 'Digite uma mensagem válida.' };
+    }
+
+    this.tribunal.chatMessages.push({
+      id: `chat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderId: sender.id,
+      senderName: sender.name,
+      senderClass: sender.classId,
+      text: cleanText,
+      filtered: wasFiltered,
+      timestamp: Date.now()
+    });
+
+    if (this.tribunal.chatMessages.length > 40) {
+      this.tribunal.chatMessages.shift();
+    }
+
+    return {
+      ok: true,
+      filtered: wasFiltered,
+      message: wasFiltered
+        ? 'Filtro de ofensas ativado: termos ofensivos foram censurados (***).'
+        : undefined
+    };
   }
 
   /**
@@ -1119,9 +1195,34 @@ export class GameRoom {
       this.tribunal.finalists = [firstId, secondId];
       this.tribunal.turn = 'TURN_2_DEFENSE';
       this.tribunal.turnEndsAt = now + 20000; // Turno 2: 20s de Direito de Defesa no Altar
-      const nameA = this.players.get(firstId)?.name || 'Suspeito A';
-      const nameB = this.players.get(secondId)?.name || 'Suspeito B';
+      const pA = this.players.get(firstId);
+      const pB = this.players.get(secondId);
+      const nameA = pA?.name || 'Suspeito A';
+      const nameB = pB?.name || 'Suspeito B';
       this.addLog(`ALTAR DE DEFESA: ${nameA} e ${nameB} foram os mais votados e têm 20s para defesa!`);
+
+      if (pA && pA.isBot) {
+        this.tribunal.chatMessages.push({
+          id: `chat_def_a_${now}`,
+          senderId: pA.id,
+          senderName: pA.name,
+          senderClass: pA.classId,
+          text: `Sou ${CLASSES_BY_ID[pA.classId].name}! Eu estava cumprindo minha missão, não sou o Lobisomem!`,
+          filtered: false,
+          timestamp: now
+        });
+      }
+      if (pB && pB.isBot && pB.id !== pA?.id) {
+        this.tribunal.chatMessages.push({
+          id: `chat_def_b_${now}`,
+          senderId: pB.id,
+          senderName: pB.name,
+          senderClass: pB.classId,
+          text: `Inocente! Olhem quem estava perto do corpo nos últimos 15s antes de atirarem a Bala de Prata!`,
+          filtered: false,
+          timestamp: now
+        });
+      }
     } else if (this.tribunal.turn === 'TURN_2_DEFENSE') {
       this.tribunal.turn = 'TURN_3_FINAL_VERDICT';
       this.tribunal.turnEndsAt = now + 15000; // Turno 3: 15s de Veredito Final

@@ -233,7 +233,7 @@
         </div>
       </div>
 
-      <!-- MODAL 1: TRIBUNAL DA IGREJA (3 TURNOS SEM EFEITO MANADA) -->
+      <!-- MODAL 1: TRIBUNAL DA IGREJA (3 TURNOS SEM EFEITO MANADA + CHAT COM FILTRO DE OFENSAS) -->
       <div id="modal-tribunal" class="modal-backdrop hidden">
         <div class="modal-window tribunal-window">
           <div class="modal-header">
@@ -254,23 +254,45 @@
             <p id="tribunal-clues-list">Analisando rastros no vilarejo...</p>
           </div>
 
-          <div id="tribunal-turn1-container">
-            <p class="section-hint">
-              Os votos são secretos para impedir efeito manada. Os 2 jogadores mais votados irão ao altar para defesa.
-            </p>
-            <div id="tribunal-suspects-grid" class="suspects-grid"></div>
-          </div>
+          <div class="tribunal-body-split">
+            <div class="tribunal-voting-col">
+              <div id="tribunal-turn1-container">
+                <p class="section-hint">
+                  Os votos são secretos para impedir efeito manada. Os 2 jogadores mais votados irão ao altar para defesa.
+                </p>
+                <div id="tribunal-suspects-grid" class="suspects-grid"></div>
+              </div>
 
-          <div id="tribunal-finalists-container" class="hidden">
-            <div id="tribunal-finalists-cards" class="finalists-row"></div>
-            <div id="tribunal-verdict-actions" class="verdict-actions hidden">
-              <button id="btn-verdict-a" class="btn-primary">Executar Acusado A (Tiro de Prata)</button>
-              <button id="btn-verdict-b" class="btn-primary">Executar Acusado B (Tiro de Prata)</button>
-              <button id="btn-verdict-absolve" class="btn-secondary">Absolver Ambos</button>
+              <div id="tribunal-finalists-container" class="hidden">
+                <div id="tribunal-finalists-cards" class="finalists-row"></div>
+                <div id="tribunal-verdict-actions" class="verdict-actions hidden">
+                  <button id="btn-verdict-a" class="btn-primary">Executar Acusado A (Tiro de Prata)</button>
+                  <button id="btn-verdict-b" class="btn-primary">Executar Acusado B (Tiro de Prata)</button>
+                  <button id="btn-verdict-absolve" class="btn-secondary">Absolver Ambos</button>
+                </div>
+                <p class="section-hint">
+                  Atenção: Se você votar para executar um inocente, perderá sua habilidade ativa até refazer sua missão!
+                </p>
+              </div>
             </div>
-            <p class="section-hint">
-              Atenção: Se você votar para executar um inocente, perderá sua habilidade ativa até refazer sua missão!
-            </p>
+
+            <!-- Chat da Votação com Filtro Automático de Ofensas -->
+            <div class="tribunal-chat-panel">
+              <div class="tribunal-chat-header">
+                <strong>Chat do Tribunal</strong>
+                <span class="chat-filter-tag">Filtro de ofensas ativo</span>
+              </div>
+              <div id="tribunal-chat-messages" class="tribunal-chat-messages"></div>
+              <form id="tribunal-chat-form" class="tribunal-chat-form" autocomplete="off">
+                <input
+                  id="tribunal-chat-input"
+                  type="text"
+                  maxlength="160"
+                  placeholder="Discuta pistas ou defenda-se..."
+                />
+                <button type="submit" class="btn-primary btn-sm">Enviar</button>
+              </form>
+            </div>
           </div>
 
           <div class="modal-footer">

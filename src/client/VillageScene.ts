@@ -358,25 +358,34 @@ export class VillageScene extends Phaser.Scene {
     }
   }
 
+  private isTypingInInput(): boolean {
+    const tag = document.activeElement?.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA';
+  }
+
   private setupKeyboardControls() {
     if (!this.input.keyboard) return;
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys({
-      W: Phaser.Input.Keyboard.KeyCodes.W,
-      A: Phaser.Input.Keyboard.KeyCodes.A,
-      S: Phaser.Input.Keyboard.KeyCodes.S,
-      D: Phaser.Input.Keyboard.KeyCodes.D,
-      B: Phaser.Input.Keyboard.KeyCodes.B,
-      E: Phaser.Input.Keyboard.KeyCodes.E,
-      F: Phaser.Input.Keyboard.KeyCodes.F,
-      T: Phaser.Input.Keyboard.KeyCodes.T,
-      R: Phaser.Input.Keyboard.KeyCodes.R,
-      Q: Phaser.Input.Keyboard.KeyCodes.Q,
-      SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE
-    }) as any;
+    this.keys = this.input.keyboard.addKeys(
+      {
+        W: Phaser.Input.Keyboard.KeyCodes.W,
+        A: Phaser.Input.Keyboard.KeyCodes.A,
+        S: Phaser.Input.Keyboard.KeyCodes.S,
+        D: Phaser.Input.Keyboard.KeyCodes.D,
+        B: Phaser.Input.Keyboard.KeyCodes.B,
+        E: Phaser.Input.Keyboard.KeyCodes.E,
+        F: Phaser.Input.Keyboard.KeyCodes.F,
+        T: Phaser.Input.Keyboard.KeyCodes.T,
+        R: Phaser.Input.Keyboard.KeyCodes.R,
+        Q: Phaser.Input.Keyboard.KeyCodes.Q,
+        SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE
+      },
+      false
+    ) as any;
 
     this.keys.B.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
       this.socket.emit('barricade_interact', (res: { ok: boolean; message: string }) => {
@@ -385,6 +394,7 @@ export class VillageScene extends Phaser.Scene {
     });
 
     this.keys.T.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive || !me?.isWerewolf) return;
       this.socket.emit('toggle_tomb', (res: any) => {
@@ -397,6 +407,7 @@ export class VillageScene extends Phaser.Scene {
     });
 
     this.keys.F.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
       this.socket.emit('toggle_barrel', (res: any) => {
@@ -409,6 +420,7 @@ export class VillageScene extends Phaser.Scene {
     });
 
     this.keys.E.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
       this.socket.emit('mission_interact', (res: { ok: boolean; message: string }) => {
@@ -417,6 +429,7 @@ export class VillageScene extends Phaser.Scene {
     });
 
     this.keys.SPACE.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
       this.socket.emit('use_ability', (res: { ok: boolean; message: string }) => {
@@ -425,6 +438,7 @@ export class VillageScene extends Phaser.Scene {
     });
 
     this.keys.R.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
       this.socket.emit('report_or_bell', (res: { ok: boolean; message: string }) => {
@@ -433,6 +447,7 @@ export class VillageScene extends Phaser.Scene {
     });
 
     this.keys.Q.on('down', () => {
+      if (this.isTypingInInput()) return;
       const me = this.snapshot?.players.find((p) => p.id === this.socket.id);
       if (!me?.isAlive) return;
       this.socket.emit('werewolf_transform', (res: { ok: boolean; message: string }) => {
