@@ -568,13 +568,20 @@ export class UIController {
       descEl.textContent = `${cls.abilityName}: ${cls.abilityDescription}`;
     }
 
-    // 1. Barra de Progresso de Missão Estilo Jogo
+    // 1. Barra de Progresso de Missão Estilo Jogo (Carrega automaticamente na zona com tempo específico de cada classe!)
     const missionLabel = document.getElementById('mission-label');
     const missionPct = document.getElementById('mission-pct');
     const missionBar = document.getElementById('mission-bar');
-    if (missionLabel) missionLabel.textContent = cls.missionTitle;
+    const durSec = ((cls.missionDurationMs || 5000) / 1000).toFixed(1);
+    if (missionLabel) {
+      missionLabel.textContent = me.isPerformingMission
+        ? `${cls.missionTitle} (Carregando • Protegido)`
+        : `${cls.missionTitle} (${durSec}s)`;
+    }
     if (missionPct) {
-      missionPct.textContent = me.abilityUnlocked ? 'PRONTA' : `${me.missionProgress}%`;
+      missionPct.textContent = me.abilityUnlocked
+        ? 'PRONTA'
+        : `${Math.floor(me.missionProgress)}%`;
     }
     if (missionBar) missionBar.style.width = `${me.missionProgress}%`;
 
@@ -688,14 +695,7 @@ export class UIController {
       btnTomb?.classList.add('hidden');
     }
 
-    // --- BOTÃO 1: MISSÃO / TOTEM [E] (Só aparece quando dentro da Zona da Missão ou perto de Totem!) ---
-    const targetZone = VILLAGE_ZONES.find((z) => z.id === cls.missionZone);
-    const inMissionZone =
-      snap.phase === 'PHASE_1_HUNT' &&
-      !me.abilityUnlocked &&
-      targetZone &&
-      isPointInZone(me.x, me.y, targetZone);
-
+    // --- BOTÃO 1: TOTEM DO LOBISOMEM [E] (As missões dos moradores agora carregam automaticamente ao entrar na zona!) ---
     const nearActiveTotem =
       snap.phase === 'PHASE_1_HUNT' &&
       me.isWerewolf &&
@@ -706,9 +706,6 @@ export class UIController {
     if (nearActiveTotem) {
       btnMission?.classList.remove('hidden');
       if (missionBtnLabel) missionBtnLabel.textContent = 'TOTEM';
-    } else if (inMissionZone) {
-      btnMission?.classList.remove('hidden');
-      if (missionBtnLabel) missionBtnLabel.textContent = 'MISSÃO';
     } else {
       btnMission?.classList.add('hidden');
     }
@@ -994,7 +991,7 @@ export class UIController {
                 <h4>${cls.order}. ${cls.name}</h4>
                 <span class="class-xp-req ${isLockedByXp ? 'xp-req-locked' : ''}">Nv.${cls.requiredLevel} (${cls.requiredXp.toLocaleString('pt-BR')} XP)</span>
               </div>
-              <div class="class-meta-line"><strong>Missão:</strong> ${cls.missionTitle}</div>
+              <div class="class-meta-line"><strong>Missão (${(cls.missionDurationMs / 1000).toFixed(1)}s):</strong> ${cls.missionTitle}</div>
               <div class="class-meta-line"><strong>${cls.abilityName}:</strong> ${cls.abilityDescription}</div>
             </div>
           </div>

@@ -34,6 +34,7 @@ interface PlayerVisualNode {
   animTimer: number;
   animFrame: number;
   facingLeft: boolean;
+  wasAbilityUnlocked: boolean;
 }
 
 export class VillageScene extends Phaser.Scene {
@@ -828,10 +829,22 @@ export class VillageScene extends Phaser.Scene {
           targetY: p.y,
           animTimer: 0,
           animFrame: 0,
-          facingLeft: false
+          facingLeft: false,
+          wasAbilityUnlocked: p.abilityUnlocked
         };
         this.playerNodes.set(p.id, node);
       }
+
+      // Dispara a Animação de Missão Concluída (Explosão de Anel Dourado + Salto + Banner Flutuante) no instante em que a missão atinge 100%!
+      if (!node.wasAbilityUnlocked && p.abilityUnlocked) {
+        this.playMissionCompleteAnimation(
+          isSelf ? this.predictedX : p.x,
+          isSelf ? this.predictedY : p.y,
+          CLASSES_BY_ID[p.classId].abilityName,
+          isSelf
+        );
+      }
+      node.wasAbilityUnlocked = p.abilityUnlocked;
 
       // Verifica se o jogador está escondido dentro de um Barril, sob a Copa da Grande Árvore Ancestral,
       // no Milharal Alto, no Bosque de Caça do Sul ou embaixo da Ponte do Rio!
@@ -872,9 +885,10 @@ export class VillageScene extends Phaser.Scene {
         node.facingLeft = frameDx < 0;
       }
 
-      if (movedThisFrame > 0.25) {
+      if (movedThisFrame > 0.25 || p.isPerformingMission) {
         node.animTimer += delta;
-        if (node.animTimer >= 105) {
+        const frameDuration = p.isPerformingMission ? 130 : 105;
+        if (node.animTimer >= frameDuration) {
           node.animTimer = 0;
           node.animFrame = node.animFrame === 1 ? 2 : 1;
         }
@@ -887,12 +901,40 @@ export class VillageScene extends Phaser.Scene {
         ? `werewolf_25d_${node.animFrame}`
         : `hero_${p.classId}_${node.animFrame}`;
 
+      // Pequeno movimento rítmico de trabalho na vertical enquanto executa a missão
+      const workBobY = p.isPerformingMission ? Math.sin(now * 0.018) * 3 : 0;
+
       node.sprite.setTexture(texKey);
-      node.sprite.setPosition(renderX, renderY);
+      node.sprite.setPosition(renderX, renderY + workBobY);
       node.sprite.setFlipX(node.facingLeft);
       node.sprite.setDepth(renderY);
       node.sprite.setAlpha(!p.isAlive ? 0.42 : isInvisible ? 0.45 : 1);
       node.sprite.setVisible(true);
+
+      // Enquanto realiza a missão (isPerformingMission):
+      // 1. Cúpula Dourada Protetora (Lobisomem NÃO pode matar durante a missão!)
+      // 2. Barra de carregamento automático com o tempo específico daquela missão acima do personagem
+      if (p.isAlive && p.isPerformingMission) {
+        const pulse = 0.72 + Math.sin(now * 0.01) * 0.2;
+        this.overlayGraphics.lineStyle(3, 0xe9c46a, pulse);
+        this.overlayGraphics.strokeEllipse(renderX, renderY - 26, 66, 82);
+        this.overlayGraphics.fillStyle(0xe9c46a, 0.12);
+        this.overlayGraphics.fillEllipse(renderX, renderY - 26, 66, 82);
+
+        const pct = Math.max(0, Math.min(1, p.missionProgress / 100));
+        const barW = 78;
+        const barH = 11;
+        const barX = renderX - barW / 2;
+        const barY = renderY - 102;
+
+        this.overlayGraphics.fillStyle(0x080c09, 0.92);
+        this.overlayGraphics.fillRoundedRect(barX, barY, barW, barH, 4);
+        this.overlayGraphics.lineStyle(1.5, 0xd99b26, 0.95);
+        this.overlayGraphics.strokeRoundedRect(barX, barY, barW, barH, 4);
+
+        this.overlayGraphics.fillStyle(0x52b788, 1);
+        this.overlayGraphics.fillRoundedRect(barX + 2, barY + 2, (barW - 4) * pct, barH - 4, 3);
+      }
 
       // Se o jogador estiver caminhando dentro da água do Lago Raso do Poço, desenha ondulações de água nos pés!
       if (p.isAlive && isPointInShallowLake(renderX, renderY)) {
@@ -911,9 +953,18 @@ export class VillageScene extends Phaser.Scene {
 
       const topOffset = p.isTransformed ? 90 : 76;
       const stunLabel = now < p.isStunnedEnd ? ' (Atordoado)' : '';
-      node.nameTag.setText(`${p.name}${stunLabel}`);
+      const missionTag = p.isPerformingMission ? ` [Missão ${Math.floor(p.missionProgress)}%]` : '';
+      node.nameTag.setText(`${p.name}${stunLabel}${missionTag}`);
       node.nameTag.setPosition(renderX, renderY - topOffset);
-      node.nameTag.setColor(p.isTransformed ? '#ef4444' : isSelf ? '#f3d5b5' : '#f2e8d5');
+      node.nameTag.setColor(
+        p.isTransformed
+          ? '#ef4444'
+          : p.isPerformingMission
+            ? '#e9c46a'
+            : isSelf
+              ? '#f3d5b5'
+              : '#f2e8d5'
+      );
       node.nameTag.setVisible(true);
     }
 
@@ -925,6 +976,93 @@ export class VillageScene extends Phaser.Scene {
         node.nameTag.destroy();
         this.playerNodes.delete(id);
       }
+    }
+  }
+
+  /**
+   * Animação visual de Missão Concluída (100%):
+   * Ondas douradas expansivas, faíscas ascendentes e texto flutuante celebrando o desbloqueio da habilidade!
+   */
+  private playMissionCompleteAnimation(
+    x: number,
+    y: number,
+    abilityName: string,
+    isSelf: boolean
+  ) {
+    const ring1 = this.add
+      .ellipse(x, y - 18, 36, 20)
+      .setStrokeStyle(3.5, 0xe9c46a, 1)
+      .setDepth(4460);
+    const ring2 = this.add
+      .ellipse(x, y - 18, 24, 14)
+      .setStrokeStyle(2.5, 0x52b788, 0.95)
+      .setDepth(4460);
+
+    this.tweens.add({
+      targets: ring1,
+      scaleX: 3.6,
+      scaleY: 3.2,
+      alpha: 0,
+      duration: 720,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring1.destroy()
+    });
+
+    this.tweens.add({
+      targets: ring2,
+      scaleX: 2.8,
+      scaleY: 2.5,
+      alpha: 0,
+      delay: 90,
+      duration: 680,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring2.destroy()
+    });
+
+    // 8 partículas luminosas subindo ao redor do personagem
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const spark = this.add
+        .circle(x + Math.cos(angle) * 18, y - 20 + Math.sin(angle) * 10, 4, 0xfef08a, 1)
+        .setDepth(4465);
+      this.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * 58,
+        y: y - 62 + Math.sin(angle) * 24,
+        alpha: 0,
+        scale: 0.3,
+        duration: 650,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy()
+      });
+    }
+
+    const bannerText = isSelf
+      ? `MISSÃO CONCLUÍDA! [${abilityName.toUpperCase()}] LIBERADA`
+      : `MISSÃO CONCLUÍDA!`;
+    const floatBanner = this.add
+      .text(x, y - 96, bannerText, {
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+        fontSize: isSelf ? '14px' : '12px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        stroke: '#060907',
+        strokeThickness: 5
+      })
+      .setOrigin(0.5)
+      .setDepth(4470);
+
+    this.tweens.add({
+      targets: floatBanner,
+      y: y - 148,
+      alpha: 0,
+      duration: 1650,
+      ease: 'Cubic.easeOut',
+      onComplete: () => floatBanner.destroy()
+    });
+
+    if (isSelf) {
+      this.onToast(`Missão concluída! Habilidade [${abilityName}] liberada (+120 XP)!`);
     }
   }
 

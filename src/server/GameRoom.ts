@@ -130,6 +130,7 @@ export class GameRoom {
       y: Math.round(CHURCH_CENTER.y + Math.sin(angle) * dist),
       facingAngle: 0,
       missionProgress: 0,
+      isPerformingMission: false,
       abilityUnlocked: false,
       abilityCharges: CLASSES_BY_ID['aldeao'].maxCharges,
       abilityCooldownEnd: 0,
@@ -259,6 +260,7 @@ export class GameRoom {
       p.x = Math.round(CHURCH_CENTER.x + Math.cos(angle) * 210);
       p.y = Math.round(CHURCH_CENTER.y + Math.sin(angle) * 210);
       p.missionProgress = 0;
+      p.isPerformingMission = false;
       p.abilityUnlocked = false;
       p.abilityCharges = CLASSES_BY_ID[p.classId].maxCharges;
       p.hasBlessingShield = false;
@@ -731,18 +733,12 @@ export class GameRoom {
       return { ok: true, message: 'Sua habilidade especial já está desbloqueada!' };
     }
 
-    p.missionProgress = Math.min(100, p.missionProgress + 35);
-    if (p.missionProgress >= 100) {
-      p.abilityUnlocked = true;
-      p.abilityCharges = cls.maxCharges;
-      p.totalXp += XP_REWARDS.MISSION_COMPLETED;
-      return {
-        ok: true,
-        message: `Missão concluída! Habilidade [${cls.abilityName}] liberada (+${XP_REWARDS.MISSION_COMPLETED} XP)!`
-      };
-    }
-
-    return { ok: true, message: `Realizando tarefa (${p.missionProgress}%)...` };
+    p.isPerformingMission = true;
+    const durationSec = (cls.missionDurationMs / 1000).toFixed(1);
+    return {
+      ok: true,
+      message: `Realizando missão automaticamente (${Math.floor(p.missionProgress)}% — duração total: ${durationSec}s). Você está protegido contra o Lobisomem!`
+    };
   }
 
   /**
@@ -904,6 +900,21 @@ export class GameRoom {
 
     const victim = this.findNearestPlayer(wolf, 105);
     if (!victim) {
+      // Verifica se havia um morador ao alcance, mas que está protegido realizando missão!
+      const missionProtectedPrey = Array.from(this.players.values()).find(
+        (other) =>
+          other.id !== wolf.id &&
+          other.isAlive &&
+          other.isPerformingMission &&
+          Math.hypot(other.x - wolf.x, other.y - wolf.y) <= 105
+      );
+      if (missionProtectedPrey) {
+        return {
+          ok: false,
+          message: `${missionProtectedPrey.name} está concentrado realizando uma missão e não pode ser atacado agora!`
+        };
+      }
+
       // Se estiver na Fase 3, executa Salto Predatório (dash curto)
       if (this.phase === 'PHASE_3_BLOOD_MOON' && now >= wolf.leapCooldownEnd) {
         wolf.x = Math.max(
@@ -1034,6 +1045,7 @@ export class GameRoom {
       pl.x = Math.round(CHURCH_CENTER.x + Math.cos(angle) * 115);
       pl.y = Math.round(CHURCH_CENTER.y + Math.sin(angle) * 95);
       pl.isTransformed = false;
+      pl.isPerformingMission = false;
       pl.hiddenInBarrelId = null;
       pl.hiddenInTombId = null;
     });
@@ -1333,6 +1345,7 @@ export class GameRoom {
     this.churchBellHp = this.churchBellMaxHp;
 
     for (const p of this.players.values()) {
+      p.isPerformingMission = false;
       if (p.isWerewolf) {
         p.isTransformed = true;
         p.hasEscapePassive = false;
@@ -1389,8 +1402,16 @@ export class GameRoom {
     let best: PlayerState | null = null;
     let bestDist = maxDist;
     for (const other of this.players.values()) {
-      // Jogadores escondidos dentro de um barril ficam protegidos e ocultos do radar de alvo!
-      if (other.id === source.id || !other.isAlive || other.hiddenInBarrelId) continue;
+      // Jogadores escondidos dentro de um barril OU realizando missão (isPerformingMission)
+      // ficam protegidos e o Lobisomem NÃO pode matá-los durante a missão!
+      if (
+        other.id === source.id ||
+        !other.isAlive ||
+        other.hiddenInBarrelId ||
+        other.isPerformingMission
+      ) {
+        continue;
+      }
       const d = Math.hypot(other.x - source.x, other.y - source.y);
       if (d <= bestDist) {
         bestDist = d;
@@ -1401,6 +1422,51 @@ export class GameRoom {
   }
 
   /**
+   * Atualiza o carregamento AUTOMÁTICO da barra de missão quando o jogador está no território da missão:
+   * - Cada classe possui seu próprio tempo de carregamento (cls.missionDurationMs: de 3.8s a 8.5s).
+   * - Enquanto está carregando a missão (isPerformingMission = true), o Lobisomem NÃO pode matar o jogador!
+   */
+  private updateAutomaticMissions(deltaMs: number, now: number) {
+    for (const p of this.players.values()) {
+      if (
+        !p.isAlive ||
+        p.abilityUnlocked ||
+        p.hiddenInBarrelId ||
+        p.hiddenInTombId ||
+        p.removingBarricadeId ||
+        (p.isWerewolf && p.isTransformed)
+      ) {
+        p.isPerformingMission = false;
+        continue;
+      }
+
+      const cls = CLASSES_BY_ID[p.classId];
+      const targetZone = VILLAGE_ZONES.find((z) => z.id === cls.missionZone);
+      if (!targetZone || !isPointInZone(p.x, p.y, targetZone)) {
+        p.isPerformingMission = false;
+        continue;
+      }
+
+      // Está dentro da zona da missão -> carrega automaticamente na velocidade específica daquela missão!
+      p.isPerformingMission = true;
+      const speedMult = now < p.hasSpeedBuffEnd ? 1.35 : 1.0; // Canção do Bardo acelera a missão
+      const durationMs = Math.max(2000, cls.missionDurationMs || 5000);
+      const incrementPct = (deltaMs / durationMs) * 100 * speedMult;
+
+      p.missionProgress = Math.min(100, Number((p.missionProgress + incrementPct).toFixed(1)));
+
+      if (p.missionProgress >= 100) {
+        p.missionProgress = 100;
+        p.isPerformingMission = false;
+        p.abilityUnlocked = true;
+        p.abilityCharges = cls.maxCharges;
+        p.totalXp += XP_REWARDS.MISSION_COMPLETED;
+        this.addLog(`${p.name} concluiu a missão [${cls.missionTitle}] e liberou ${cls.abilityName}!`);
+      }
+    }
+  }
+
+  /**
    * Loop autoritativo de 20 ticks por segundo (50ms)
    */
   public tick(deltaMs: number) {
@@ -1408,6 +1474,7 @@ export class GameRoom {
 
     if (this.phase === 'PHASE_1_HUNT') {
       this.updateBarricadesProgress(now);
+      this.updateAutomaticMissions(deltaMs, now);
       // Ciclo do Eclipse Lunar a cada 40s (dura 14s)
       this.eclipseCycleTimerMs += deltaMs;
       const cyclePos = this.eclipseCycleTimerMs % 45000;

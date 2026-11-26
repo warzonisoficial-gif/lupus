@@ -149,6 +149,7 @@ export interface PlayerState {
   y: number;
   facingAngle: number;
   missionProgress: number; // 0 a 100
+  isPerformingMission: boolean; // true enquanto a missão da classe estiver carregando automaticamente na zona
   abilityUnlocked: boolean;
   abilityCharges: number;
   abilityCooldownEnd: number;
