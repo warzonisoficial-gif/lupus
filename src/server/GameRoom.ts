@@ -34,6 +34,7 @@ import {
   ClassId,
   CorpseEntity,
   GamePhase,
+  HunterRelicEntity,
   PlayerState,
   TotemPoint,
   TrapEntity,
@@ -78,6 +79,7 @@ export class GameRoom {
   private traps: TrapEntity[] = [];
   private corpses: CorpseEntity[] = [];
   private barricades: BarricadeEntity[] = [];
+  private hunterRelic: HunterRelicEntity | null = null;
   private positionHistory: PositionLog[] = [];
 
   private tribunal: TribunalState | null = null;
@@ -165,6 +167,7 @@ export class GameRoom {
     this.totems = INITIAL_RUNIC_TOTEMS.map((t) => ({ ...t, destroyed: false }));
     this.traps = [];
     this.corpses = [];
+    this.hunterRelic = null;
     this.barricades = BARRICADE_SLOTS.map((slot) => ({
       slotId: slot.id,
       x: slot.x,
@@ -374,6 +377,7 @@ export class GameRoom {
     p.isConnected = false;
     p.reconnectDeadlineMs = null;
     p.totalXp = Math.max(0, p.totalXp - 100); // Penalidade anti-abandono: -100 XP
+    p.matchmakingTimeoutUntilMs = Date.now() + 60000; // Bloqueio temporário de 60s para entrar em outra sala
 
     if (this.phase === 'LOBBY') {
       this.removePlayer(playerId);
@@ -381,6 +385,7 @@ export class GameRoom {
     }
 
     // 1. Se o jogador que caiu/abandonou era o LOBISOMEM:
+    // — Sucessão da Maldição (Transferência Secreta) na Fase 1/2 e IA Feral na Fase 3 (Lua de Sangue)!
     if (p.isWerewolf && p.isAlive) {
       if (this.phase === 'PHASE_3_BLOOD_MOON') {
         // Na Fase 3 (Lua de Sangue), todo mundo já vê a fera atacando o Sino -> IA Feral assume até o fim!
@@ -391,7 +396,8 @@ export class GameRoom {
         return;
       }
 
-      // Na Fase 1 ou Fase 2: transfere secretamente a Maldição do Lobisomem para outro morador vivo!
+      // Na Fase 1 ou Fase 2: o antigo boneco do Lobo cai morto como vítima da noite e a Maldição
+      // é transferida SECRETAMENTE para um Aldeão vivo!
       const candidates = Array.from(this.players.values()).filter(
         (other) => other.id !== p.id && other.isAlive && !other.isWerewolf
       );
@@ -409,8 +415,23 @@ export class GameRoom {
         p.isWerewolf = false;
         p.isTransformed = false;
         p.isAlive = false;
+
+        // Deixa o corpo do antigo hospedeiro no chão como se tivesse sucumbido à maldição
+        this.corpses.push({
+          id: `corpse_curse_${Date.now()}`,
+          victimId: p.id,
+          victimName: p.name,
+          victimClass: p.classId,
+          x: p.x,
+          y: p.y,
+          diedAt: Date.now(),
+          escapeDirection: 'Sombra misteriosa',
+          nearbySuspects: this.getRecentSuspectsNear(p.x, p.y, 15000, p.name),
+          reported: false
+        });
+
         this.addLog(
-          `${p.name} abandonou a partida (${reasonLabel}, -100 XP). A Maldição do Lobisomem despertou secretamente em outro morador vivo!`
+          `${p.name} sucumbiu nas sombras (${reasonLabel}, -100 XP). A Maldição do Lobisomem despertou secretamente em um novo hospedeiro!`
         );
       } else {
         p.isBot = true;
@@ -423,31 +444,25 @@ export class GameRoom {
     }
 
     // 2. Se o jogador que caiu/abandonou era o CAÇADOR:
+    // — Herança das Armas do Caçador (Relíquia no Chão OU Sucessão Automática)!
+    // Deixa cair a Relíquia / Rifle & Bolsa de Armadilhas do Caçador no chão onde ele estava;
+    // qualquer morador vivo que passar por cima pega na hora, ou após 10s a sucessão automática entrega a um Aldeão vivo!
     if (p.classId === 'cacador' && p.isAlive) {
-      const candidates = Array.from(this.players.values()).filter(
-        (other) => other.id !== p.id && other.isAlive && !other.isWerewolf
+      this.hunterRelic = {
+        id: `relic_${Date.now()}`,
+        x: p.x,
+        y: p.y,
+        droppedBy: p.name,
+        missionProgress: p.missionProgress,
+        abilityUnlocked: p.abilityUnlocked,
+        abilityCharges: Math.max(1, p.abilityCharges),
+        autoAssignAtMs: Date.now() + 10000
+      };
+      p.classId = 'aldeao';
+      p.isAlive = false;
+      this.addLog(
+        `O Caçador (${p.name}) caiu (${reasonLabel}, -100 XP)! A Relíquia do Caçador (Rifle & Armadilhas) caiu no chão — pegue-a ou ela será herdada automaticamente em 10s!`
       );
-      const heir =
-        candidates.find((c) => !c.isBot && c.classId === 'aldeao') ||
-        candidates.find((c) => c.classId === 'aldeao') ||
-        candidates[0];
-
-      if (heir) {
-        heir.classId = 'cacador';
-        heir.missionProgress = Math.max(heir.missionProgress, p.missionProgress);
-        heir.abilityUnlocked = heir.abilityUnlocked || p.abilityUnlocked;
-        heir.abilityCharges = Math.max(1, p.abilityCharges);
-        p.classId = 'aldeao';
-        p.isAlive = false;
-        this.addLog(
-          `O Caçador (${p.name}) caiu (${reasonLabel}, -100 XP)! ${heir.name} herdou o Rifle e as Armadilhas de Caça!`
-        );
-      } else {
-        p.isBot = true;
-        this.addLog(
-          `O Caçador (${p.name}) caiu (${reasonLabel}, -100 XP)! A IA assumiu o controle do Caçador!`
-        );
-      }
       this.checkLivingPlayersVictory();
       return;
     }
@@ -467,6 +482,27 @@ export class GameRoom {
       if (p.isConnected === false && p.reconnectDeadlineMs && now >= p.reconnectDeadlineMs) {
         this.resolveExpiredReconnectOrAbandon(p.id, '45s de reconexão esgotados');
       }
+    }
+
+    // Se a Relíquia do Caçador caiu no chão e ninguém passou por cima em 10s, aciona a Sucessão Automática para um Aldeão vivo!
+    if (this.hunterRelic && now >= this.hunterRelic.autoAssignAtMs) {
+      const candidates = Array.from(this.players.values()).filter(
+        (other) => other.isAlive && !other.isWerewolf
+      );
+      const heir =
+        candidates.find((c) => !c.isBot && c.classId === 'aldeao') ||
+        candidates.find((c) => c.classId === 'aldeao') ||
+        candidates[0];
+      if (heir) {
+        heir.classId = 'cacador';
+        heir.missionProgress = Math.max(heir.missionProgress, this.hunterRelic.missionProgress);
+        heir.abilityUnlocked = heir.abilityUnlocked || this.hunterRelic.abilityUnlocked;
+        heir.abilityCharges = Math.max(1, this.hunterRelic.abilityCharges);
+        this.addLog(
+          `Sucessão Automática das Armas do Caçador: ${heir.name} herdou o Rifle e as Armadilhas de Caça!`
+        );
+      }
+      this.hunterRelic = null;
     }
   }
 
@@ -902,7 +938,28 @@ export class GameRoom {
       }
     }
 
+    this.checkHunterRelicPickup(p);
     this.checkTrapCollisions(p);
+  }
+
+  /**
+   * Herança das Armas do Caçador (Relíquia no Chão OU Sucessão Automática):
+   * - Se um morador vivo (preferencialmente Aldeão ou qualquer inocente) passar por cima da Relíquia no chão (<= 85px),
+   *   ele coleta o Rifle e as Armadilhas de Caça na hora!
+   */
+  private checkHunterRelicPickup(p: PlayerState) {
+    if (!this.hunterRelic || !p.isAlive || p.isWerewolf) return;
+    const dist = Math.hypot(p.x - this.hunterRelic.x, p.y - this.hunterRelic.y);
+    if (dist <= 85) {
+      p.classId = 'cacador';
+      p.missionProgress = Math.max(p.missionProgress, this.hunterRelic.missionProgress);
+      p.abilityUnlocked = p.abilityUnlocked || this.hunterRelic.abilityUnlocked;
+      p.abilityCharges = Math.max(1, this.hunterRelic.abilityCharges);
+      this.addLog(
+        `${p.name} recolheu a Relíquia do Caçador no chão e assumiu o Rifle e as Armadilhas de Caça!`
+      );
+      this.hunterRelic = null;
+    }
   }
 
   /**
@@ -2864,6 +2921,7 @@ export class GameRoom {
       traps: visibleTraps,
       corpses: this.corpses,
       barricades: this.barricades,
+      hunterRelic: this.hunterRelic,
       tribunal: this.tribunal,
       winner: this.winner,
       winReason: this.winReason,

@@ -75,6 +75,7 @@ for (const cfg of BRAZILIAN_ROOMS_CONFIG) {
 const DEFAULT_ROOM_ID = BRAZILIAN_ROOMS_CONFIG[0].id;
 const socketToRoom = new Map<string, string>();
 const socketMeta = new Map<string, { name: string; xp: number; token: string }>();
+const tokenPenaltyTimeout = new Map<string, number>(); // token -> timestamp limite de bloqueio de matchmaking (60s)
 
 function getAllRoomsSummary(): BrazilianRoomSummary[] {
   return Array.from(rooms.values()).map((r) => r.getRoomSummary());
@@ -148,6 +149,17 @@ io.on('connection', (socket) => {
         xp: initialXp,
         token: sessionToken
       };
+      const penaltyEnds = tokenPenaltyTimeout.get(meta.token) || 0;
+      if (Date.now() < penaltyEnds && nextRoom.roomId !== socketToRoom.get(socket.id)) {
+        const remSec = Math.ceil((penaltyEnds - Date.now()) / 1000);
+        if (cb) {
+          cb({
+            ok: false,
+            message: `Bloqueio de Matchmaking por abandono de partida! Aguarde ${remSec}s para trocar de sala.`
+          });
+        }
+        return;
+      }
       if (payload.playerName && payload.playerName.trim()) {
         meta.name = payload.playerName.trim().slice(0, 22);
         socketMeta.set(socket.id, meta);
@@ -203,6 +215,17 @@ io.on('connection', (socket) => {
         xp: initialXp,
         token: sessionToken
       };
+      const penaltyEnds = tokenPenaltyTimeout.get(meta.token) || 0;
+      if (Date.now() < penaltyEnds) {
+        const remSec = Math.ceil((penaltyEnds - Date.now()) / 1000);
+        if (cb) {
+          cb({
+            ok: false,
+            message: `Bloqueio de Matchmaking por abandono de partida! Aguarde ${remSec}s para criar uma nova sala.`
+          });
+        }
+        return;
+      }
       if (payload.playerName && payload.playerName.trim()) {
         const cleanPlayerName = sanitizeTribunalChatMessage(payload.playerName.trim()).cleanText.slice(0, 22);
         meta.name = cleanPlayerName || meta.name;
@@ -417,14 +440,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Abandonar partida voluntariamente (aplica -100 XP e transfere Lobo/Caçador imediatamente!)
+  // Abandonar partida voluntariamente (aplica -100 XP, bloqueio de matchmaking de 60s e transfere Lobo/Caçador imediatamente!)
   socket.on('abandon_match', (cb?: (res: { ok: boolean; message: string }) => void) => {
     const room = getRoomOfSocket(socket.id);
+    const meta = socketMeta.get(socket.id);
+    if (meta?.token) {
+      tokenPenaltyTimeout.set(meta.token, Date.now() + 60000);
+    }
     room.resolveExpiredReconnectOrAbandon(socket.id, 'Abandono de partida');
     if (cb) {
       cb({
         ok: true,
-        message: 'Partida abandonada (-100 XP). Papéis vitais (Lobo/Caçador) foram transferidos para manter a partida!'
+        message:
+          'Partida abandonada (-100 XP e bloqueio de 60s para trocar de sala). Sucessão da Maldição / Relíquia do Caçador acionada!'
       });
     }
   });

@@ -1042,6 +1042,44 @@ export class AssetGenerator {
       ctx.arc(cx + 6, 45, 2.8, 0, Math.PI * 2);
       ctx.fill();
     });
+
+    // 10. Relíquia do Caçador no Chão 2.5D (Rifle de Caça + Bolsa de Armadilhas com Aura Esmeralda/Ouro) (68x56)
+    this.createCanvas(scene, 'prop_hunter_relic_25d', 68, 56, (ctx, w, _h) => {
+      const cx = w / 2;
+      const aura = ctx.createRadialGradient(cx, 32, 4, cx, 32, 28);
+      aura.addColorStop(0, 'rgba(250, 204, 21, 0.75)');
+      aura.addColorStop(0.55, 'rgba(34, 197, 94, 0.35)');
+      aura.addColorStop(1, 'rgba(21, 128, 61, 0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.ellipse(cx, 34, 30, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Mochila de couro do Caçador
+      ctx.fillStyle = '#5c3419';
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.roundRect(cx - 14, 20, 28, 22, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Fivela dourada da bolsa
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(cx - 4, 28, 8, 6);
+
+      // Rifle de Prata cruzado sobre a mochila
+      ctx.save();
+      ctx.translate(cx, 28);
+      ctx.rotate(-0.35);
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-24, -3, 18, 6);
+      ctx.strokeRect(-24, -3, 18, 6);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-6, -2.5, 28, 5);
+      ctx.strokeRect(-6, -2.5, 28, 5);
+      ctx.restore();
+    });
   }
 
   /**

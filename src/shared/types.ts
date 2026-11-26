@@ -124,6 +124,17 @@ export interface TrapEntity {
   triggered: boolean;
 }
 
+export interface HunterRelicEntity {
+  id: string;
+  x: number;
+  y: number;
+  droppedBy: string;
+  missionProgress: number;
+  abilityUnlocked: boolean;
+  abilityCharges: number;
+  autoAssignAtMs: number;
+}
+
 export interface CorpseEntity {
   id: string;
   victimId: string;
@@ -175,6 +186,7 @@ export interface PlayerState {
   leapCooldownEnd: number;
   // Progresso de Conta
   totalXp: number;
+  matchmakingTimeoutUntilMs?: number; // Bloqueio temporário de 60s de matchmaking se abandonar partida
 }
 
 export interface TribunalChatMessage {
@@ -239,6 +251,7 @@ export interface WorldSnapshot {
   traps: TrapEntity[];
   corpses: CorpseEntity[];
   barricades: BarricadeEntity[];
+  hunterRelic: HunterRelicEntity | null;
   tribunal: TribunalState | null;
   winner: 'VILLAGE' | 'WEREWOLF' | null;
   winReason: string | null;

@@ -88,6 +88,8 @@ export class VillageScene extends Phaser.Scene {
   private hidingBarrelSprites: Map<string, Phaser.GameObjects.Image> = new Map();
   private werewolfTombSprites: Map<string, Phaser.GameObjects.Image> = new Map();
   private barricadeSprites: Map<string, Phaser.GameObjects.Image> = new Map();
+  private hunterRelicSprite: Phaser.GameObjects.Image | null = null;
+  private hunterRelicLabel: Phaser.GameObjects.Text | null = null;
 
   private onToast: (msg: string) => void;
 
@@ -836,6 +838,49 @@ export class VillageScene extends Phaser.Scene {
       if (!activeTrapIds.has(id)) {
         spr.destroy();
         this.trapSprites.delete(id);
+      }
+    }
+
+    // 3.5. Relíquia das Armas do Caçador no Chão (Quando o Caçador cai, qualquer morador pode pegar ou herda em 10s!)
+    if (this.snapshot.hunterRelic) {
+      const relic = this.snapshot.hunterRelic;
+      const remSec = Math.max(0, Math.ceil((relic.autoAssignAtMs - now) / 1000));
+      if (!this.hunterRelicSprite) {
+        this.hunterRelicSprite = this.add
+          .image(relic.x, relic.y, 'prop_hunter_relic_25d')
+          .setOrigin(0.5, 0.78)
+          .setDepth(relic.y + 4);
+      } else {
+        this.hunterRelicSprite.setPosition(relic.x, relic.y);
+        this.hunterRelicSprite.setDepth(relic.y + 4);
+      }
+      if (!this.hunterRelicLabel) {
+        this.hunterRelicLabel = this.add
+          .text(relic.x, relic.y - 46, '', {
+            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#fef08a',
+            stroke: '#060907',
+            strokeThickness: 4.5
+          })
+          .setOrigin(0.5)
+          .setDepth(4360);
+      }
+      this.hunterRelicLabel.setPosition(relic.x, relic.y - 46);
+      this.hunterRelicLabel.setText(`ARMAS DO CAÇADOR (Pegue ou Sucessão em ${remSec}s)`);
+
+      const pulseR = 44 + Math.sin(now * 0.012) * 8;
+      this.overlayGraphics.lineStyle(3, 0xe9c46a, 0.92);
+      this.overlayGraphics.strokeCircle(relic.x, relic.y - 8, pulseR);
+    } else {
+      if (this.hunterRelicSprite) {
+        this.hunterRelicSprite.destroy();
+        this.hunterRelicSprite = null;
+      }
+      if (this.hunterRelicLabel) {
+        this.hunterRelicLabel.destroy();
+        this.hunterRelicLabel = null;
       }
     }
 

@@ -37,6 +37,8 @@ export class UIController {
   private lastLobbyChatLastId: string = '';
   private lastRoomsRenderSignature: string = '';
   private wasLocalPlayerAlive: boolean = true;
+  private wasLocalPlayerWerewolf: boolean = false;
+  private lastLocalPlayerClassId: ClassId = 'aldeao';
 
   private wheelAngleDeg: number = 0;
   private wheelSpinning: boolean = false;
@@ -491,7 +493,23 @@ export class UIController {
       if (this.wasLocalPlayerAlive && !me.isAlive && killedByWerewolfClaws) {
         this.playWerewolfKillCinematic(me.classId);
       }
+
+      // Aviso sombrio quando o jogador herda a Maldição do Lobisomem ou as Armas do Caçador durante a partida!
+      if (snap.phase === 'PHASE_1_HUNT' && prevPhase === 'PHASE_1_HUNT') {
+        if (!this.wasLocalPlayerWerewolf && me.isWerewolf) {
+          this.showToast(
+            'SUCESSÃO DA MALDIÇÃO: O antigo Lobisomem sucumbiu... O sangue da fera despertou em VOCÊ!'
+          );
+        } else if (this.lastLocalPlayerClassId !== 'cacador' && me.classId === 'cacador') {
+          this.showToast(
+            'HERANÇA DAS ARMAS: O Caçador caiu! Você herdou o Rifle e as Armadilhas de Caça!'
+          );
+        }
+      }
+
       this.wasLocalPlayerAlive = me.isAlive;
+      this.wasLocalPlayerWerewolf = me.isWerewolf;
+      this.lastLocalPlayerClassId = me.classId;
     }
 
     this.updateTopHud(snap, me || null);
