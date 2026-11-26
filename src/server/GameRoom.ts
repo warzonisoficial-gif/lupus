@@ -18,6 +18,7 @@ import {
   TOMB_INTERACT_RADIUS,
   VILLAGE_ZONES,
   WEREWOLF_TOMBS,
+  clampToLobbyChurchBounds,
   isPlayerInCover,
   isPointInChurchSacredGround,
   isPointInRunicCircle,
@@ -87,6 +88,8 @@ export class GameRoom {
   private winner: 'VILLAGE' | 'WEREWOLF' | null = null;
   private winReason: string | null = null;
   private killFeed: { id: string; text: string; timestamp: number }[] = [];
+  private lobbyChatMessages: TribunalChatMessage[] = [];
+  private postGameStartedAt: number = 0;
 
   constructor(
     roomId: string,
@@ -335,16 +338,76 @@ export class GameRoom {
   }
 
   /**
-   * Retorna a sala para o estado de LOBBY mantendo os jogadores humanos conectados
+   * Retorna TODOS os jogadores que terminaram a partida para a MESMA SALA no estado de LOBBY
+   * (mantendo todos os jogadores juntos e posicionados na Praça da Catedral Central!).
    */
-  public returnToLobby() {
-    for (const [id, p] of this.players.entries()) {
-      if (p.isBot) this.players.delete(id);
+  public returnToLobby(keepAllCurrentPlayers = true) {
+    if (!keepAllCurrentPlayers) {
+      for (const [id, p] of this.players.entries()) {
+        if (p.isBot) this.players.delete(id);
+      }
     }
+
     this.phase = 'LOBBY';
     this.lobbyCountdownEndsAt = null;
     this.resetMapEntities();
-    this.evaluateLobbyReadiness();
+
+    const allPlayers = Array.from(this.players.values());
+    allPlayers.forEach((p, idx) => {
+      const angle = (idx / Math.max(1, allPlayers.length)) * Math.PI * 2;
+      const clamped = clampToLobbyChurchBounds(
+        Math.round(CHURCH_CENTER.x + Math.cos(angle) * 165),
+        Math.round(CHURCH_CENTER.y + Math.sin(angle) * 135)
+      );
+      p.x = clamped.x;
+      p.y = clamped.y;
+      p.isAlive = true;
+      p.isWerewolf = false;
+      p.isTransformed = false;
+      if (p.classId === 'cacador') {
+        p.classId = 'aldeao';
+      }
+      p.missionProgress = 0;
+      p.isPerformingMission = false;
+      p.abilityUnlocked = false;
+      p.abilityCharges = CLASSES_BY_ID[p.classId].maxCharges;
+      p.hasBlessingShield = false;
+      p.totemsDestroyed = 0;
+      p.hasEscapePassive = false;
+      p.isStunnedEnd = 0;
+      p.isInvisibleEnd = 0;
+      p.guiltSlowEnd = 0;
+      p.hiddenInBarrelId = null;
+      p.usedBarrelIds = [];
+      p.hiddenInTombId = null;
+      p.removingBarricadeId = null;
+      p.removingBarricadeEndsAt = 0;
+      p.barricadeCooldownEnd = 0;
+    });
+
+    this.lobbyChatMessages.push({
+      id: `lchat_sys_${Date.now()}`,
+      senderId: 'system',
+      senderName: 'Catedral da Vila',
+      senderClass: 'inquisidor',
+      text: `Todos os ${allPlayers.length} jogadores retornaram para [${this.roomName}] na Praça da Catedral! Conversem ou troquem de personagem antes da próxima rodada.`,
+      filtered: false,
+      timestamp: Date.now()
+    });
+    if (this.lobbyChatMessages.length > 35) {
+      this.lobbyChatMessages.shift();
+    }
+
+    // Se a sala já está com o grupo completo que terminou a partida, dá 12 segundos no Lobby da Catedral
+    // para conversarem no chat e trocarem de personagem no Armário antes da próxima rodada começar!
+    if (this.players.size >= this.requiredPlayers) {
+      this.lobbyCountdownEndsAt = Date.now() + 12000;
+      this.addLog(
+        `De volta à sala [${this.roomName}] com os mesmos ${this.players.size} jogadores! Próxima partida em 12 segundos...`
+      );
+    } else {
+      this.evaluateLobbyReadiness();
+    }
   }
 
   /**
@@ -588,8 +651,14 @@ export class GameRoom {
         this.barricades,
         p.isWerewolf
       );
-      p.x = Math.round(resolved.x);
-      p.y = Math.round(resolved.y);
+      if (this.phase === 'LOBBY') {
+        const clamped = clampToLobbyChurchBounds(resolved.x, resolved.y);
+        p.x = Math.round(clamped.x);
+        p.y = Math.round(clamped.y);
+      } else {
+        p.x = Math.round(resolved.x);
+        p.y = Math.round(resolved.y);
+      }
       p.facingAngle = facingAngle;
     } else {
       const len = Math.hypot(dx, dy);
@@ -604,8 +673,14 @@ export class GameRoom {
           this.barricades,
           p.isWerewolf
         );
-        p.x = Math.round(resolved.x);
-        p.y = Math.round(resolved.y);
+        if (this.phase === 'LOBBY') {
+          const clamped = clampToLobbyChurchBounds(resolved.x, resolved.y);
+          p.x = Math.round(clamped.x);
+          p.y = Math.round(clamped.y);
+        } else {
+          p.x = Math.round(resolved.x);
+          p.y = Math.round(resolved.y);
+        }
         p.facingAngle = facingAngle;
       }
     }
@@ -1593,6 +1668,73 @@ export class GameRoom {
   }
 
   /**
+   * Chat da Sala de Espera (LOBBY) na Praça da Catedral Central com Filtro Automático de Ofensas!
+   */
+  public handleLobbyChat(
+    senderId: string,
+    rawText: string
+  ): { ok: boolean; filtered?: boolean; message?: string } {
+    if (this.phase !== 'LOBBY') {
+      return { ok: false, message: 'O chat do Lobby só fica ativo na sala de espera.' };
+    }
+    const sender = this.players.get(senderId);
+    if (!sender) {
+      return { ok: false, message: 'Jogador não encontrado na sala.' };
+    }
+
+    const { cleanText, wasFiltered } = sanitizeTribunalChatMessage(rawText || '');
+    if (!cleanText) {
+      return { ok: false, message: 'Digite uma mensagem válida.' };
+    }
+
+    this.lobbyChatMessages.push({
+      id: `lchat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderId: sender.id,
+      senderName: sender.name,
+      senderClass: sender.classId,
+      text: cleanText,
+      filtered: wasFiltered,
+      timestamp: Date.now()
+    });
+
+    if (this.lobbyChatMessages.length > 35) {
+      this.lobbyChatMessages.shift();
+    }
+
+    // Se houver bots na sala de espera, um deles responde amigavelmente para dar vida ao chat da Catedral!
+    const bots = Array.from(this.players.values()).filter((p) => p.isBot);
+    if (bots.length > 0 && Math.random() < 0.45) {
+      const responder = bots[Math.floor(Math.random() * bots.length)];
+      const replies = [
+        'Bora fechar a sala! Quem vai pegar o Padre ou a Freira?',
+        'Já escolhi meu personagem aqui no Armário da Catedral!',
+        'Fiquem espertos no Eclipse Lunar quando a partida começar.',
+        'Boa sorte a todos, vamos descobrir quem será sorteado como Lobo!'
+      ];
+      this.lobbyChatMessages.push({
+        id: `lchat_bot_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        senderId: responder.id,
+        senderName: responder.name,
+        senderClass: responder.classId,
+        text: replies[Math.floor(Math.random() * replies.length)],
+        filtered: false,
+        timestamp: Date.now() + 10
+      });
+      if (this.lobbyChatMessages.length > 35) {
+        this.lobbyChatMessages.shift();
+      }
+    }
+
+    return {
+      ok: true,
+      filtered: wasFiltered,
+      message: wasFiltered
+        ? 'Filtro de ofensas ativado: termos ofensivos foram censurados (***).'
+        : undefined
+    };
+  }
+
+  /**
    * Turno 1 (Voto Secreto) e Turno 3 (Veredito Final: Executar A, Executar B ou Absolver Ambos)
    */
   public handleTribunalVote(voterId: string, choice: string) {
@@ -1911,6 +2053,7 @@ export class GameRoom {
 
   public endMatch(winner: 'VILLAGE' | 'WEREWOLF', reason: string) {
     this.phase = 'POST_GAME';
+    this.postGameStartedAt = Date.now();
     this.winner = winner;
     this.winReason = reason;
     this.tribunal = null;
@@ -2064,6 +2207,12 @@ export class GameRoom {
             'A alvorada chegou após a Lua de Sangue e o Sino da Igreja permaneceu intacto! Vitória da Vila!'
           );
         }
+      }
+    } else if (this.phase === 'POST_GAME') {
+      // Após terminar a partida e dar tempo de girar a Roda da Vitória (15s), retorna automaticamente
+      // TODOS os jogadores para a mesma sala de espera na Praça da Catedral!
+      if (this.postGameStartedAt > 0 && now - this.postGameStartedAt >= 15000) {
+        this.returnToLobby(true);
       }
     }
   }
@@ -2490,6 +2639,7 @@ export class GameRoom {
       requiredPlayers: this.requiredPlayers,
       maxPlayers: this.maxPlayers,
       lobbyCountdownSec,
+      lobbyChatMessages: this.lobbyChatMessages,
       phase: this.phase,
       phaseTimerSec:
         this.phase === 'PHASE_2_TRIBUNAL' && this.tribunal

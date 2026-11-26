@@ -223,6 +223,7 @@ export interface WorldSnapshot {
   requiredPlayers: number;
   maxPlayers: number;
   lobbyCountdownSec: number | null; // Contador regressivo (ex: 5s..1s) quando a sala atinge o número necessário; zera se alguém sair!
+  lobbyChatMessages: TribunalChatMessage[]; // Chat da Sala de Espera (Lobby) na Praça da Catedral!
   phase: GamePhase;
   phaseTimerSec: number;
   eclipseActive: boolean;

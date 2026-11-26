@@ -34,6 +34,7 @@ export class UIController {
   private lastKillFeedTopId: string = '';
   private lastTribunalTurnRendered: string = '';
   private lastTribunalChatLastId: string = '';
+  private lastLobbyChatLastId: string = '';
   private lastRoomsRenderSignature: string = '';
   private wasLocalPlayerAlive: boolean = true;
 
@@ -257,6 +258,25 @@ export class UIController {
       this.renderBrazilLobbyModal();
     });
 
+    document.getElementById('in-world-chat-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('in-world-chat-input') as HTMLInputElement | null;
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      this.socket.emit(
+        'lobby_chat',
+        text,
+        (res?: { ok: boolean; filtered?: boolean; message?: string }) => {
+          if (res?.message) {
+            this.showToast(res.message);
+          }
+        }
+      );
+    });
+
     document.getElementById('btn-toggle-drawer')?.addEventListener('click', () => {
       document.getElementById('tactical-drawer')?.classList.toggle('hidden');
     });
@@ -430,7 +450,12 @@ export class UIController {
     document.getElementById('btn-new-match-from-wheel')?.addEventListener('click', () => {
       this.stopWheelLoop();
       document.getElementById('modal-victory-wheel')?.classList.add('hidden');
-      this.socket.emit('start_match', 9);
+      this.lobbyMinimizedManually = true;
+      this.socket.emit('return_to_lobby', () => {
+        this.showToast(
+          'De volta à mesma sala na Praça da Catedral com todos os jogadores que terminaram a partida!'
+        );
+      });
     });
   }
 
@@ -463,6 +488,15 @@ export class UIController {
       this.openVictoryWheelModal(
         snap.winner || 'VILLAGE',
         snap.winReason || 'A partida chegou ao fim.'
+      );
+    } else if (snap.phase === 'LOBBY' && prevPhase === 'POST_GAME') {
+      // Quando a partida termina e todos voltam automaticamente para a mesma sala de espera na Catedral,
+      // fecha a Roda da Vitória e mantém o jogador andando com o grupo na Praça da Catedral!
+      this.stopWheelLoop();
+      document.getElementById('modal-victory-wheel')?.classList.add('hidden');
+      this.lobbyMinimizedManually = true;
+      this.showToast(
+        `De volta à sala [${snap.roomName}] na Praça da Catedral com os mesmos ${snap.players.length} jogadores!`
       );
     }
   }
@@ -539,10 +573,47 @@ export class UIController {
         const missing = Math.max(0, snap.requiredPlayers - snap.players.length);
         statusEl.textContent =
           missing > 0
-            ? `Aguardando mais ${missing} jogador(es)... Ande com seu boneco ou vá ao Armário [E] escolher seu personagem!`
+            ? `Aguardando mais ${missing} jogador(es) na Praça da Catedral... Converse no chat ou vá ao Armário [E] escolher seu personagem!`
             : 'Preparando sorteio do Lobisomem e do Caçador...';
       }
     }
+
+    this.renderLobbyChatMessages(snap.lobbyChatMessages || []);
+  }
+
+  private renderLobbyChatMessages(messages: WorldSnapshot['lobbyChatMessages']) {
+    const box = document.getElementById('in-world-chat-messages');
+    if (!box) return;
+
+    const lastId = messages[messages.length - 1]?.id || 'empty';
+    if (lastId === this.lastLobbyChatLastId) return;
+    this.lastLobbyChatLastId = lastId;
+
+    if (messages.length === 0) {
+      box.innerHTML = `<div class="in-world-chat-empty">Chat da Praça da Catedral aberto. Digite abaixo para conversar com a sala!</div>`;
+      return;
+    }
+
+    box.innerHTML = messages
+      .slice(-14)
+      .map((msg) => {
+        const isSys = msg.senderId === 'system';
+        const roleLabel = isSys
+          ? 'CATEDRAL'
+          : CLASSES_BY_ID[msg.senderClass]?.name || 'Morador';
+        const filteredBadge = msg.filtered
+          ? `<span class="tribunal-chat-censored">[Filtro]</span>`
+          : '';
+        return `
+          <div class="in-world-chat-line ${isSys ? 'in-world-chat-sys' : ''}">
+            <strong>${this.escapeHtml(msg.senderName)} (${this.escapeHtml(roleLabel)})${filteredBadge}:</strong>
+            <span>${this.escapeHtml(msg.text)}</span>
+          </div>
+        `;
+      })
+      .join('');
+
+    box.scrollTop = box.scrollHeight;
   }
 
   private renderBrazilLobbyModal() {

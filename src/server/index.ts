@@ -242,13 +242,23 @@ io.on('connection', (socket) => {
     if (cb) cb(res);
   });
 
-  // Voltar a sala atual para o Lobby de espera
+  // Voltar a sala atual para o Lobby de espera mantendo todos os jogadores que terminaram a partida na mesma sala
   socket.on('return_to_lobby', (cb?: (res: { ok: boolean }) => void) => {
     const room = getRoomOfSocket(socket.id);
-    room.returnToLobby();
+    room.returnToLobby(true);
     io.emit('rooms_list', getAllRoomsSummary());
     if (cb) cb({ ok: true });
   });
+
+  // Chat da Sala de Espera (Lobby) na Praça da Catedral Central com Filtro de Ofensas
+  socket.on(
+    'lobby_chat',
+    (text: string, cb?: (res: { ok: boolean; filtered?: boolean; message?: string }) => void) => {
+      const room = getRoomOfSocket(socket.id);
+      const res = room.handleLobbyChat(socket.id, text);
+      if (cb) cb(res);
+    }
+  );
 
   socket.on('select_class', (classId: ClassId, cb?: (res: { ok: boolean; reason?: string }) => void) => {
     const room = getRoomOfSocket(socket.id);

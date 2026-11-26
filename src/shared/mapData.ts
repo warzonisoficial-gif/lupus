@@ -17,6 +17,22 @@ export const BELL_INTERACT_RADIUS = 130;
 export const LOBBY_WARDROBE_POS = { x: 1940, y: 1385 };
 export const LOBBY_WARDROBE_INTERACT_RADIUS = 115;
 
+// Limites da Praça da Catedral Central durante a Sala de Espera (LOBBY):
+// Os jogadores ficam travados dentro do pátio da Igreja/Catedral Central até a partida começar!
+export const LOBBY_PLAZA_BOUNDS = {
+  minX: 1730,
+  maxX: 2470,
+  minY: 1120,
+  maxY: 1680
+};
+
+export function clampToLobbyChurchBounds(x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.max(LOBBY_PLAZA_BOUNDS.minX, Math.min(LOBBY_PLAZA_BOUNDS.maxX, x)),
+    y: Math.max(LOBBY_PLAZA_BOUNDS.minY, Math.min(LOBBY_PLAZA_BOUNDS.maxY, y))
+  };
+}
+
 // Duração ampliada dos Turnos das Luas (Lua Clara: 75s | Eclipse Lunar: 35s | Lua de Sangue: 140s)
 export const CLEAR_MOON_DURATION_MS = 75000;
 export const ECLIPSE_DURATION_MS = 35000;

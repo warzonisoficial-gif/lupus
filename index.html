@@ -252,30 +252,46 @@
         </div>
       </div>
 
-      <!-- HUD FLUTUANTE DE SALA DE ESPERA ESTILO AMONG US (Aparece no rodapé enquanto você anda com seu boneco pela sala esperando fechar o time!) -->
+      <!-- HUD FLUTUANTE DE SALA DE ESPERA ESTILO AMONG US (Travado na Praça da Catedral Central + Chat da Sala!) -->
       <div id="in-world-lobby-hud" class="in-world-lobby-hud hidden">
-        <div class="in-world-lobby-info">
-          <div class="in-world-room-header">
-            <strong id="in-world-room-title">Sala Brasil #1 — Serra da Mantiqueira</strong>
-            <span id="in-world-room-count" class="in-world-count-badge">1 / 9 Jogadores</span>
+        <div class="in-world-lobby-top-row">
+          <div class="in-world-lobby-info">
+            <div class="in-world-room-header">
+              <strong id="in-world-room-title">Sala Brasil #1 — Serra da Mantiqueira</strong>
+              <span id="in-world-room-count" class="in-world-count-badge">1 / 9 Jogadores</span>
+            </div>
+            <p id="in-world-lobby-status" class="in-world-status-line">
+              Lobby travado na Praça da Catedral Central. Vá até o Armário [E] escolher seu personagem ou converse no chat abaixo!
+            </p>
           </div>
-          <p id="in-world-lobby-status" class="in-world-status-line">
-            Ande pela Praça da Vila e vá até o Armário [E] para escolher seu personagem. O Lobo e o Caçador são sorteados no início!
-          </p>
+          <div class="in-world-lobby-actions">
+            <button id="btn-inworld-wardrobe" class="btn-primary btn-sm">
+              Personagem [E]
+            </button>
+            <button id="btn-inworld-add-player" class="btn-secondary btn-sm">
+              + Jogador BR
+            </button>
+            <button id="btn-inworld-remove-player" class="btn-secondary btn-sm">
+              - Sair 1 (Zera)
+            </button>
+            <button id="btn-inworld-change-room" class="btn-secondary btn-sm">
+              Trocar Sala
+            </button>
+          </div>
         </div>
-        <div class="in-world-lobby-actions">
-          <button id="btn-inworld-wardrobe" class="btn-primary btn-sm">
-            Escolher Personagem
-          </button>
-          <button id="btn-inworld-add-player" class="btn-secondary btn-sm">
-            + Jogador BR
-          </button>
-          <button id="btn-inworld-remove-player" class="btn-secondary btn-sm">
-            - Sair 1 (Zera)
-          </button>
-          <button id="btn-inworld-change-room" class="btn-secondary btn-sm">
-            Trocar Sala
-          </button>
+
+        <!-- Chat da Sala de Espera na Catedral Central (Com Filtro de Ofensas + Balão de Fala acima do Boneco) -->
+        <div class="in-world-chat-box">
+          <div id="in-world-chat-messages" class="in-world-chat-messages"></div>
+          <form id="in-world-chat-form" class="in-world-chat-form" autocomplete="off">
+            <input
+              id="in-world-chat-input"
+              type="text"
+              maxlength="140"
+              placeholder="Converse com os jogadores na Praça da Catedral (aparece acima do seu boneco)..."
+            />
+            <button type="submit" class="btn-primary btn-sm">Enviar</button>
+          </form>
         </div>
       </div>
 
@@ -506,7 +522,9 @@
               </div>
               <div class="wheel-actions">
                 <button id="btn-spin-stop" class="btn-primary">Parar Ponteiro (Skill Check)!</button>
-                <button id="btn-new-match-from-wheel" class="btn-secondary">Nova Partida</button>
+                <button id="btn-new-match-from-wheel" class="btn-secondary">
+                  Voltar para a Mesma Sala (Mesmos Jogadores)
+                </button>
               </div>
             </div>
           </div>
