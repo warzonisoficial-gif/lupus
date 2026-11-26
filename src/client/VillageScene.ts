@@ -8,7 +8,7 @@ import {
   CHURCH_CENTER,
   GIANT_ANCIENT_TREE,
   HIDING_BARRELS,
-  LOBBY_PLAZA_BOUNDS,
+  LOBBY_PASSAGE_FENCES,
   LOBBY_WARDROBE_INTERACT_RADIUS,
   LOBBY_WARDROBE_POS,
   MAP_HEIGHT,
@@ -17,7 +17,6 @@ import {
   TOMB_INTERACT_RADIUS,
   VILLAGE_ZONES,
   WEREWOLF_TOMBS,
-  clampToLobbyChurchBounds,
   isPlayerHiddenByEnvironment,
   isOnPathOrClearing,
   isPointInChurchSacredGround,
@@ -25,6 +24,7 @@ import {
   isPointInRunicCircle,
   isPointInShallowLake,
   isPointInZone,
+  resolveLobbyFenceCollisions,
   resolveMapCollisions
 } from '../shared/mapData';
 import { PlayerState, WorldSnapshot } from '../shared/types';
@@ -88,6 +88,7 @@ export class VillageScene extends Phaser.Scene {
   private hidingBarrelSprites: Map<string, Phaser.GameObjects.Image> = new Map();
   private werewolfTombSprites: Map<string, Phaser.GameObjects.Image> = new Map();
   private barricadeSprites: Map<string, Phaser.GameObjects.Image> = new Map();
+  private lobbyFenceSprites: Map<string, Phaser.GameObjects.Image> = new Map();
   private hunterRelicSprite: Phaser.GameObjects.Image | null = null;
   private hunterRelicLabel: Phaser.GameObjects.Text | null = null;
 
@@ -608,9 +609,14 @@ export class VillageScene extends Phaser.Scene {
           myPlayer.isWerewolf
         );
         if (this.snapshot.phase === 'LOBBY') {
-          const clamped = clampToLobbyChurchBounds(resolved.x, resolved.y);
-          this.predictedX = clamped.x;
-          this.predictedY = clamped.y;
+          const fenced = resolveLobbyFenceCollisions(
+            this.predictedX,
+            this.predictedY,
+            resolved.x,
+            resolved.y
+          );
+          this.predictedX = fenced.x;
+          this.predictedY = fenced.y;
         } else {
           this.predictedX = resolved.x;
           this.predictedY = resolved.y;
@@ -644,8 +650,23 @@ export class VillageScene extends Phaser.Scene {
     this.overlayGraphics.clear();
     const now = Date.now();
 
-    // 1. Seta Guia Tática apontando para o Território da Missão (ou cercado da Praça da Catedral + halo no Armário durante o LOBBY!)
-    if (myPlayer && myPlayer.isAlive && this.snapshot.phase === 'LOBBY') {
+    // 1. Halo no Armário de Personagens + Cercas Físicas de Madeira nas 4 Passagens da Catedral durante o LOBBY!
+    const isLobbyPhase = this.snapshot.phase === 'LOBBY';
+    for (const fence of LOBBY_PASSAGE_FENCES) {
+      let spr = this.lobbyFenceSprites.get(fence.id);
+      const texKey =
+        fence.orientation === 'HORIZONTAL' ? 'prop_lobby_fence_h_25d' : 'prop_lobby_fence_v_25d';
+      if (!spr) {
+        spr = this.add
+          .image(fence.x, fence.y, texKey)
+          .setOrigin(0.5, 0.72)
+          .setDepth(fence.y);
+        this.lobbyFenceSprites.set(fence.id, spr);
+      }
+      spr.setVisible(isLobbyPhase);
+    }
+
+    if (myPlayer && myPlayer.isAlive && isLobbyPhase) {
       const distW = Math.hypot(
         LOBBY_WARDROBE_POS.x - this.predictedX,
         LOBBY_WARDROBE_POS.y - this.predictedY
@@ -657,18 +678,6 @@ export class VillageScene extends Phaser.Scene {
         LOBBY_WARDROBE_POS.y - 6,
         74,
         32
-      );
-
-      // Delimitação sutil do Pátio Sagrado da Catedral onde os jogadores aguardam no Lobby
-      const bw = LOBBY_PLAZA_BOUNDS.maxX - LOBBY_PLAZA_BOUNDS.minX + 36;
-      const bh = LOBBY_PLAZA_BOUNDS.maxY - LOBBY_PLAZA_BOUNDS.minY + 36;
-      this.overlayGraphics.lineStyle(2.5, 0x7c5836, 0.55);
-      this.overlayGraphics.strokeRoundedRect(
-        LOBBY_PLAZA_BOUNDS.minX - 18,
-        LOBBY_PLAZA_BOUNDS.minY - 18,
-        bw,
-        bh,
-        24
       );
     }
     if (myPlayer && myPlayer.isAlive && this.snapshot.phase === 'PHASE_1_HUNT' && !myPlayer.abilityUnlocked) {

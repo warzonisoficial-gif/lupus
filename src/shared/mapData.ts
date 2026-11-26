@@ -17,19 +17,58 @@ export const BELL_INTERACT_RADIUS = 130;
 export const LOBBY_WARDROBE_POS = { x: 1940, y: 1385 };
 export const LOBBY_WARDROBE_INTERACT_RADIUS = 115;
 
-// Limites da Praça da Catedral Central durante a Sala de Espera (LOBBY):
-// Os jogadores ficam travados dentro do pátio da Igreja/Catedral Central até a partida começar!
+// Cercas / Portões de Madeira do Lobby nas 4 Passagens que saem da Praça da Catedral Central:
+// Enquanto a sala está em espera (LOBBY), essas 4 cercas físicas fecham as 4 estradas de saída da Catedral!
+export const LOBBY_PASSAGE_FENCES: BarricadeSlot[] = [
+  { id: 'lobby_fence_west', name: 'Portão Oeste da Catedral', x: 1680, y: 1388, orientation: 'VERTICAL' },
+  { id: 'lobby_fence_east', name: 'Portão Leste da Catedral', x: 2520, y: 1385, orientation: 'VERTICAL' },
+  { id: 'lobby_fence_north', name: 'Portão Norte da Catedral', x: 2092, y: 1060, orientation: 'HORIZONTAL' },
+  { id: 'lobby_fence_south', name: 'Portão Sul da Catedral', x: 2145, y: 1740, orientation: 'HORIZONTAL' }
+];
+
 export const LOBBY_PLAZA_BOUNDS = {
-  minX: 1730,
-  maxX: 2470,
-  minY: 1120,
-  maxY: 1680
+  minX: 1685,
+  maxX: 2515,
+  minY: 1065,
+  maxY: 1735
 };
+
+/**
+ * Resolve colisão física contra as 4 Cercas de Madeira nas passagens da Praça da Catedral durante o LOBBY!
+ */
+export function resolveLobbyFenceCollisions(
+  prevX: number,
+  prevY: number,
+  targetX: number,
+  targetY: number
+): { x: number; y: number } {
+  let nx = targetX;
+  let ny = targetY;
+
+  for (const fence of LOBBY_PASSAGE_FENCES) {
+    const halfW = fence.orientation === 'HORIZONTAL' ? 140 : 44;
+    const halfH = fence.orientation === 'HORIZONTAL' ? 44 : 140;
+
+    if (Math.abs(nx - fence.x) < halfW && Math.abs(ny - fence.y) < halfH) {
+      if (fence.orientation === 'HORIZONTAL') {
+        ny = prevY <= fence.y ? fence.y - halfH : fence.y + halfH;
+      } else {
+        nx = prevX <= fence.x ? fence.x - halfW : fence.x + halfW;
+      }
+    }
+  }
+
+  // Como apenas as 4 passagens saem da clareira da Catedral (o restante do perímetro é floresta fechada),
+  // garante que ninguém atravesse por fora dos portões de madeira durante o Lobby:
+  nx = Math.max(LOBBY_PLAZA_BOUNDS.minX, Math.min(LOBBY_PLAZA_BOUNDS.maxX, nx));
+  ny = Math.max(LOBBY_PLAZA_BOUNDS.minY, Math.min(LOBBY_PLAZA_BOUNDS.maxY, ny));
+  return { x: nx, y: ny };
+}
 
 export function clampToLobbyChurchBounds(x: number, y: number): { x: number; y: number } {
   return {
-    x: Math.max(LOBBY_PLAZA_BOUNDS.minX, Math.min(LOBBY_PLAZA_BOUNDS.maxX, x)),
-    y: Math.max(LOBBY_PLAZA_BOUNDS.minY, Math.min(LOBBY_PLAZA_BOUNDS.maxY, y))
+    x: Math.max(LOBBY_PLAZA_BOUNDS.minX + 35, Math.min(LOBBY_PLAZA_BOUNDS.maxX - 35, x)),
+    y: Math.max(LOBBY_PLAZA_BOUNDS.minY + 35, Math.min(LOBBY_PLAZA_BOUNDS.maxY - 35, y))
   };
 }
 

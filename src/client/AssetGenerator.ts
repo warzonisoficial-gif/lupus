@@ -1080,6 +1080,82 @@ export class AssetGenerator {
       ctx.strokeRect(-6, -2.5, 28, 5);
       ctx.restore();
     });
+
+    // 11. Cercas / Portões de Madeira 2.5D das Passagens do Lobby da Catedral (Horizontal 240x88 e Vertical 88x240)
+    this.createCanvas(scene, 'prop_lobby_fence_h_25d', 240, 88, (ctx, w, _h) => {
+      // Sombra no chão
+      ctx.fillStyle = 'rgba(0,0,0,0.48)';
+      ctx.beginPath();
+      ctx.ellipse(w / 2, 74, 110, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Travessas horizontais da cerca (2 réguas de carvalho com ferrolhos de ferro)
+      ctx.fillStyle = '#5c3419';
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 2.8;
+      [34, 54].forEach((ry) => {
+        ctx.beginPath();
+        ctx.roundRect(14, ry, w - 28, 11, 3);
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      // Estacas verticais da cerca com pontas entalhadas e pregos de bronze
+      for (let px = 20; px <= w - 28; px += 32) {
+        ctx.fillStyle = px === 20 || px >= w - 36 ? '#3b200e' : '#783f19';
+        ctx.beginPath();
+        ctx.moveTo(px, 74);
+        ctx.lineTo(px, 22);
+        ctx.lineTo(px + 7, 12);
+        ctx.lineTo(px + 14, 22);
+        ctx.lineTo(px + 14, 74);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Rebites de bronze nas travessas
+        ctx.fillStyle = '#d99b26';
+        [39, 59].forEach((ry) => {
+          ctx.beginPath();
+          ctx.arc(px + 7, ry, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    });
+
+    this.createCanvas(scene, 'prop_lobby_fence_v_25d', 88, 240, (ctx, w, h) => {
+      const cx = w / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.48)';
+      ctx.beginPath();
+      ctx.ellipse(cx, h / 2 + 6, 16, 108, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Vigas verticais contínuas da cerca fechando a passagem lateral
+      ctx.fillStyle = '#5c3419';
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 2.8;
+      [cx - 11, cx + 3].forEach((rx) => {
+        ctx.beginPath();
+        ctx.roundRect(rx, 16, 9, h - 32, 3);
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      // Mourões / estacas de madeira ao longo da cerca vertical
+      for (let py = 20; py <= h - 34; py += 32) {
+        ctx.fillStyle = py === 20 || py >= h - 42 ? '#3b200e' : '#783f19';
+        ctx.beginPath();
+        ctx.roundRect(cx - 22, py, 44, 16, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#d99b26';
+        ctx.beginPath();
+        ctx.arc(cx - 7, py + 8, 2.2, 0, Math.PI * 2);
+        ctx.arc(cx + 7, py + 8, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
   }
 
   /**

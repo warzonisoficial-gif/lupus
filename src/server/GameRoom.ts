@@ -24,6 +24,7 @@ import {
   isPointInRunicCircle,
   isPointInShallowLake,
   isPointInZone,
+  resolveLobbyFenceCollisions,
   resolveMapCollisions
 } from '../shared/mapData';
 import { XP_REWARDS, evaluateVictoryWheelAngle } from '../shared/progressionData';
@@ -895,9 +896,9 @@ export class GameRoom {
         p.isWerewolf
       );
       if (this.phase === 'LOBBY') {
-        const clamped = clampToLobbyChurchBounds(resolved.x, resolved.y);
-        p.x = Math.round(clamped.x);
-        p.y = Math.round(clamped.y);
+        const fenced = resolveLobbyFenceCollisions(p.x, p.y, resolved.x, resolved.y);
+        p.x = Math.round(fenced.x);
+        p.y = Math.round(fenced.y);
       } else {
         p.x = Math.round(resolved.x);
         p.y = Math.round(resolved.y);
@@ -917,9 +918,9 @@ export class GameRoom {
           p.isWerewolf
         );
         if (this.phase === 'LOBBY') {
-          const clamped = clampToLobbyChurchBounds(resolved.x, resolved.y);
-          p.x = Math.round(clamped.x);
-          p.y = Math.round(clamped.y);
+          const fenced = resolveLobbyFenceCollisions(p.x, p.y, resolved.x, resolved.y);
+          p.x = Math.round(fenced.x);
+          p.y = Math.round(fenced.y);
         } else {
           p.x = Math.round(resolved.x);
           p.y = Math.round(resolved.y);
