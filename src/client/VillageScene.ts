@@ -136,9 +136,11 @@ export class VillageScene extends Phaser.Scene {
       .image(this.scale.width / 2, this.scale.height / 2, 'vignette_vision')
       .setScrollFactor(0)
       .setDepth(5000);
+    this.updateResponsiveCameraZoom(this.scale.width, this.scale.height);
     this.updateVignetteSize(this.scale.width, this.scale.height, false);
 
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
+      this.updateResponsiveCameraZoom(gameSize.width, gameSize.height);
       if (this.visionVignette) {
         this.visionVignette.setPosition(gameSize.width / 2, gameSize.height / 2);
         this.updateVignetteSize(
@@ -152,12 +154,28 @@ export class VillageScene extends Phaser.Scene {
     this.setupKeyboardControls();
   }
 
+  /**
+   * Ajusta automaticamente o zoom da câmera do Phaser para Celulares (Portrait/Landscape) e Tablets,
+   * garantindo que o jogador sempre enxergue o mesmo campo de visão tático ao redor do boneco!
+   */
+  private updateResponsiveCameraZoom(w: number, h: number) {
+    if (!this.cameras?.main) return;
+    const minDim = Math.min(w, h);
+    let targetZoom = 1.0;
+    if (minDim < 440) {
+      targetZoom = 0.72; // Celulares (Portrait 360..430px ou Landscape 360..430px de altura)
+    } else if (minDim < 820) {
+      targetZoom = 0.86; // Tablets (iPad / Galaxy Tab)
+    }
+    this.cameras.main.setZoom(targetZoom);
+  }
+
   private updateVignetteSize(w: number, h: number, isEclipse: boolean) {
     if (!this.visionVignette) return;
-    // A máscara da vinheta SEMPRE precisa cobrir no mínimo toda a largura e altura da tela (w, h),
-    // inclusive durante o Eclipse Lunar, para jamais deixar faixas claras sobrando nas laterais!
-    const coverW = Math.max(w, h) * 1.35;
-    const coverH = Math.max(w, h) * 1.35;
+    // Compensa o zoom da câmera para que a vinheta SEMPRE cubra 100% da tela em celulares, tablets e PC!
+    const camZoom = this.cameras?.main?.zoom || 1;
+    const coverW = (Math.max(w, h) * 1.45) / camZoom;
+    const coverH = (Math.max(w, h) * 1.45) / camZoom;
     if (isEclipse) {
       this.visionVignette.setDisplaySize(coverW, coverH);
       this.visionVignette.setAlpha(0.96);

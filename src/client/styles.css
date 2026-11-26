@@ -27,6 +27,7 @@ body {
   width: 100%;
   max-width: 100vw;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   background-color: var(--bg-black-forest);
   color: var(--text-parchment);
@@ -34,14 +35,19 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: none;
+  overscroll-behavior: none;
 }
 
 #app-viewport {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 #phaser-container {
@@ -50,6 +56,30 @@ body {
   width: 100%;
   height: 100%;
   z-index: 1;
+  touch-action: none;
+}
+
+.modal-window,
+.tactical-drawer,
+.tribunal-chat-messages,
+.in-world-chat-messages,
+.lobby-players-list,
+.event-list {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+input,
+select,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+
+button {
+  touch-action: manipulation;
 }
 
 /* HUD Superior Unificado em 3 Colunas (Esquerda / Lua Cheia Central / Direita — Zero Sobreposição) */
@@ -1874,7 +1904,7 @@ body {
   display: none !important;
 }
 
-@media (max-width: 920px) {
+@media (max-width: 1024px) {
   .hud-xp-badge {
     display: none;
   }
@@ -1882,7 +1912,7 @@ body {
     width: 196px;
   }
   .btn-hud-pill {
-    padding: 0 10px;
+    padding: 0 11px;
     height: 36px;
     font-size: 11px;
     gap: 5px;
@@ -1896,16 +1926,310 @@ body {
     height: 52px;
   }
   .joystick-base {
+    width: 100px;
+    height: 100px;
+  }
+  .game-action-orb {
+    width: 74px;
+    height: 74px;
+  }
+  .orb-mission {
+    width: 82px;
+    height: 82px;
+  }
+  .modal-window {
+    max-height: 92dvh;
+    padding: 14px;
+  }
+}
+
+/* MODO CELULAR EM PÉ (Mobile Portrait: largura <= 640px)
+   Reorganiza o Top HUD em 2 linhas enxutas, empilha todos os modais com rolagem touch fluida
+   e ajusta o Joystick, Chat Retrátil e Botões de Ação para caberem sem estourar 320px-430px! */
+@media (max-width: 640px) {
+  #top-hud {
+    top: max(6px, env(safe-area-inset-top, 6px));
+    left: 8px;
+    right: 8px;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 6px;
+  }
+
+  .hud-left-group {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    width: 100%;
+  }
+
+  .hud-unified-player-card {
+    width: 100%;
+    min-height: 48px;
+    padding: 5px 9px 5px 6px;
+    gap: 8px;
+    border-radius: 9px;
+  }
+
+  .hud-avatar-frame {
+    width: 36px;
+    height: 38px;
+  }
+
+  .hud-portrait-img {
+    width: 30px;
+    height: 34px;
+  }
+
+  .hud-player-details {
+    width: 100%;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .role-name {
+    font-size: 12px;
+  }
+
+  .role-sub {
+    font-size: 9px;
+  }
+
+  .gauge-title {
+    font-size: 10px;
+  }
+
+  .hud-moon-centerpiece {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    justify-self: end;
+    flex-direction: row;
+    gap: 6px;
+    background: rgba(14, 19, 15, 0.92);
+    border: 1.5px solid #5c3d24;
+    border-radius: 10px;
+    padding: 3px 8px 3px 4px;
+  }
+
+  .moon-dial-wrapper,
+  #hud-moon-canvas {
+    width: 40px;
+    height: 40px;
+  }
+
+  .moon-phase-caption {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+
+  .hud-right-actions {
+    grid-column: 1 / -1;
+    grid-row: 2 / 3;
+    justify-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    width: 100%;
+  }
+
+  .btn-hud-pill {
+    width: 100%;
+    justify-content: center;
+    height: 34px;
+    padding: 0 6px;
+    font-size: 11px;
+    border-radius: 8px;
+  }
+
+  /* Chat Retrátil na Esquerda em Celular Portrait: Fica logo abaixo das 2 linhas do Top HUD */
+  .lobby-left-chat-wrapper {
+    top: 104px;
+    left: 8px;
+    right: 8px;
+  }
+
+  .lobby-chat-tab-btn {
+    padding: 7px 12px;
+    font-size: 11.5px;
+  }
+
+  .lobby-left-chat-drawer {
+    width: 100%;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 230px);
+  }
+
+  .in-world-chat-messages {
+    height: 150px;
+  }
+
+  #in-world-chat-input,
+  #tribunal-chat-input,
+  .lobby-name-field input,
+  .create-room-fields input,
+  .create-room-fields select {
+    font-size: 16px !important; /* Evita auto-zoom forçado do Safari iOS ao tocar em inputs! */
+  }
+
+  /* Gaveta de Menu Lateral em Celular Portrait */
+  .tactical-drawer {
+    top: 104px;
+    left: 8px;
+    right: 8px;
+    bottom: 120px;
+    width: auto;
+    max-width: none;
+    padding: 12px;
+  }
+
+  /* Joystick e Orbs de Ação na Base da Tela em Celular Portrait */
+  #bottom-controls-layer {
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom, 12px));
+  }
+
+  .joystick-base {
     width: 96px;
     height: 96px;
   }
+
+  .joystick-ring-inner {
+    width: 58px;
+    height: 58px;
+  }
+
+  .joystick-stick {
+    width: 40px;
+    height: 40px;
+  }
+
+  .action-pad {
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: calc(100vw - 130px);
+  }
+
   .game-action-orb {
+    width: 66px;
+    height: 66px;
+  }
+
+  .orb-mission {
     width: 72px;
     height: 72px;
   }
-  .orb-mission {
-    width: 80px;
-    height: 80px;
+
+  .orb-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .orb-label {
+    font-size: 9.5px;
+  }
+
+  .orb-hotkey {
+    display: none; /* Esconde atalhos de teclado [E]/[Q]/[F] em telas touch de celular */
+  }
+
+  /* Modais em Celular Portrait (Tela Cheia Confortável com Rolagem Touch Suave) */
+  .modal-backdrop {
+    padding: 6px;
+    align-items: stretch;
+  }
+
+  .modal-window {
+    width: 100%;
+    max-width: 100%;
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+    padding: 12px;
+    gap: 10px;
+    border-radius: 10px;
+  }
+
+  .modal-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .modal-header h2 {
+    font-size: 16px;
+  }
+
+  .modal-header button {
+    width: 100%;
+    padding: 10px;
+    font-size: 13px;
+  }
+
+  .lobby-top-bar,
+  .lobby-split-grid,
+  .create-room-fields,
+  .tribunal-body-split,
+  .finalists-row,
+  .classes-grid,
+  .suspects-grid,
+  .brazil-rooms-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .lobby-countdown-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .lobby-countdown-pill {
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .tribunal-turn1-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .verdict-actions {
+    flex-direction: column;
+  }
+
+  .verdict-actions button {
+    width: 100%;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  /* Cinemática de Abate responsiva para Celular Portrait */
+  .kill-spotlight-stage {
+    height: 270px;
+  }
+
+  .kill-actors-row {
+    gap: 16px;
+  }
+
+  .kill-wolf-sprite {
+    width: 96px;
+    height: 112px;
+  }
+
+  .kill-victim-wrap {
+    width: 92px;
+    height: 105px;
+  }
+
+  .kill-claws-svg {
+    width: 280px;
+    height: 210px;
+  }
+
+  .kill-banner-text h2 {
+    font-size: 16px;
   }
 }
 
