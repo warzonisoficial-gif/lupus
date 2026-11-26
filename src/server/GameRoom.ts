@@ -354,8 +354,15 @@ export class GameRoom {
     }
 
     if (typeof clientX === 'number' && typeof clientY === 'number') {
-      // Atualiza diretamente com a coordenada predita do cliente, validando limites do mapa, Rio e Barricadas de Madeira
-      const resolved = resolveMapCollisions(p.x, p.y, clientX, clientY, this.barricades);
+      // O Lobisomem (p.isWerewolf) pode entrar na Floresta Densa para se esconder e emboscar!
+      const resolved = resolveMapCollisions(
+        p.x,
+        p.y,
+        clientX,
+        clientY,
+        this.barricades,
+        p.isWerewolf
+      );
       p.x = Math.round(resolved.x);
       p.y = Math.round(resolved.y);
       p.facingAngle = facingAngle;
@@ -364,7 +371,14 @@ export class GameRoom {
       if (len > 0) {
         const nx = (dx / len) * speed;
         const ny = (dy / len) * speed;
-        const resolved = resolveMapCollisions(p.x, p.y, p.x + nx, p.y + ny, this.barricades);
+        const resolved = resolveMapCollisions(
+          p.x,
+          p.y,
+          p.x + nx,
+          p.y + ny,
+          this.barricades,
+          p.isWerewolf
+        );
         p.x = Math.round(resolved.x);
         p.y = Math.round(resolved.y);
         p.facingAngle = facingAngle;

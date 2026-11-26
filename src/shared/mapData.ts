@@ -484,6 +484,7 @@ export function isPlayerHiddenByEnvironment(x: number, y: number): boolean {
 
 export function isPlayerInCover(x: number, y: number): boolean {
   return (
+    !isOnPathOrClearing(x, y) ||
     isPlayerHiddenByEnvironment(x, y) ||
     VILLAGE_ZONES.some((z) => z.isCoverZone && isPointInZone(x, y, z))
   );
@@ -492,14 +493,16 @@ export function isPlayerInCover(x: number, y: number): boolean {
 /**
  * Resolve colisão natural do Vilarejo:
  * 1. O Rio Profundo a Leste só pode ser atravessado pela Ponte de Madeira.
- * 2. Os Bosques Naturais Redondos (NATURAL_FOREST_CLUSTERS) entre os territórios empurram suavemente o jogador ao redor.
+ * 2. Os moradores comuns SÓ podem caminhar pelas Trilhas e Clareiras (não podem cortar caminho).
+ * 3. O LOBISOMEM (canEnterForest = true) PODE entrar na Floresta Densa entre os territórios para se esconder e cortar caminho!
  */
 export function resolveMapCollisions(
   prevX: number,
   prevY: number,
   targetX: number,
   targetY: number,
-  activeBarricades?: BarricadeEntity[]
+  activeBarricades?: BarricadeEntity[],
+  canEnterForest = false
 ): { x: number; y: number } {
   let nx = Math.max(70, Math.min(MAP_WIDTH - 70, targetX));
   let ny = Math.max(70, Math.min(MAP_HEIGHT - 60, targetY));
@@ -519,8 +522,9 @@ export function resolveMapCollisions(
     }
   }
 
-  // 2. Proíbe cortar caminho fora das Trilhas e Clareiras (com deslizamento suave acompanhando a curva da trilha!)
-  if (!isOnPathOrClearing(nx, ny)) {
+  // 2. Para moradores comuns (canEnterForest = false), proíbe cortar caminho fora das Trilhas e Clareiras.
+  // O Lobisomem (canEnterForest = true) pode entrar livremente na Floresta Densa para se esconder!
+  if (!canEnterForest && !isOnPathOrClearing(nx, ny)) {
     if (isOnPathOrClearing(nx, prevY)) {
       ny = prevY;
     } else if (isOnPathOrClearing(prevX, ny)) {

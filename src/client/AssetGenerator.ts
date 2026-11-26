@@ -1440,52 +1440,90 @@ export class AssetGenerator {
         ctx.stroke();
       }
 
-      // F) Vegetação Natural (Árvores e Arbustos) preenchendo harmonicamente todas as áreas fora das trilhas e clareiras!
-      // Assim o jogador vê claramente os caminhos abertos no meio da floresta e não pode cortar caminho pelo mato!
-      for (let fy = 90; fy <= MAP_HEIGHT - 70; fy += 92) {
-        for (let fx = 90; fx <= MAP_WIDTH - 70; fx += 92) {
-          const jx = ((fx * 17 + fy * 13) % 38) - 19;
-          const jy = ((fx * 11 + fy * 23) % 34) - 17;
+      // F) FLORESTA DENSA E FECHADA preenchendo todas as áreas fora das trilhas e clareiras!
+      // O Lobisomem pode entrar nessa mata fechada para se esconder completamente sob a copa densa das árvores!
+      for (let fy = 70; fy <= MAP_HEIGHT - 60; fy += 46) {
+        for (let fx = 70; fx <= MAP_WIDTH - 60; fx += 46) {
+          const jx = ((fx * 17 + fy * 13) % 24) - 12;
+          const jy = ((fx * 11 + fy * 23) % 22) - 11;
           const px = fx + jx;
           const py = fy + jy;
 
-          // Não planta árvores dentro do Rio nem sobre as Trilhas/Clareiras caminháveis (deixa margem de 42px)
-          if (px > RIVER_LEFT_BANK - 50 && px < RIVER_RIGHT_BANK + 50) continue;
+          // Não planta árvores dentro do Rio nem sobre as Trilhas/Clareiras caminháveis (deixa margem de 32px)
+          if (px > RIVER_LEFT_BANK - 46 && px < RIVER_RIGHT_BANK + 46) continue;
           if (
             isOnPathOrClearing(px, py) ||
-            isOnPathOrClearing(px - 38, py) ||
-            isOnPathOrClearing(px + 38, py) ||
-            isOnPathOrClearing(px, py - 38) ||
-            isOnPathOrClearing(px, py + 38)
+            isOnPathOrClearing(px - 32, py) ||
+            isOnPathOrClearing(px + 32, py) ||
+            isOnPathOrClearing(px, py - 32) ||
+            isOnPathOrClearing(px, py + 32)
           ) {
             continue;
           }
 
-          // Sombra suave sob a mata fora da trilha
-          const shade = ctx.createRadialGradient(px, py, 10, px, py, 75);
-          shade.addColorStop(0, 'rgba(5, 14, 9, 0.55)');
-          shade.addColorStop(1, 'rgba(5, 14, 9, 0)');
+          // Sombra profunda de mata fechada cobrindo todo o solo da floresta sem espaços vazios
+          const shade = ctx.createRadialGradient(px, py, 16, px, py, 82);
+          shade.addColorStop(0, 'rgba(2, 8, 5, 0.92)');
+          shade.addColorStop(0.68, 'rgba(4, 14, 9, 0.65)');
+          shade.addColorStop(1, 'rgba(4, 14, 9, 0)');
           ctx.fillStyle = shade;
           ctx.beginPath();
-          ctx.arc(px, py, 75, 0, Math.PI * 2);
+          ctx.arc(px, py, 82, 0, Math.PI * 2);
           ctx.fill();
 
-          // Alterna harmoniosamente entre arbustos floridos nas bordas da trilha e cedros altos no fundo
-          ctx.drawImage(bushTex, px - 36, py - 18, 54, 46);
-          ctx.drawImage(cedarTex, px - 48, py - 88, 96, 118);
+          // Camada densa sobreposta de arbustos e cedros largos/altos sem buracos no meio da mata
+          const scaleVar = 0.96 + ((fx * 7 + fy * 3) % 24) * 0.014;
+          const treeW = Math.round(112 * scaleVar);
+          const treeH = Math.round(138 * scaleVar);
+          ctx.drawImage(bushTex, px - 38, py - 22, 60, 52);
+          ctx.drawImage(bushTex, px - 8, py - 16, 56, 48);
+          ctx.drawImage(cedarTex, px - treeW / 2, py - treeH + 22, treeW, treeH);
         }
       }
 
-      // Moldura florestal nas 4 bordas do mundo
-      for (let bx = 60; bx < MAP_WIDTH; bx += 95) {
-        ctx.drawImage(cedarTex, bx - 52, -10, 104, 128);
-        ctx.drawImage(cedarTex, bx - 52, MAP_HEIGHT - 115, 104, 128);
+      // Moldura florestal densa nas 4 bordas do mundo
+      for (let bx = 40; bx < MAP_WIDTH; bx += 54) {
+        ctx.drawImage(cedarTex, bx - 56, -12, 112, 136);
+        ctx.drawImage(cedarTex, bx - 56, MAP_HEIGHT - 120, 112, 136);
       }
-      for (let by = 80; by < MAP_HEIGHT; by += 95) {
-        ctx.drawImage(cedarTex, -15, by - 64, 104, 128);
-        ctx.drawImage(cedarTex, MAP_WIDTH - 90, by - 64, 104, 128);
+      for (let by = 50; by < MAP_HEIGHT; by += 54) {
+        ctx.drawImage(cedarTex, -18, by - 68, 112, 136);
+        ctx.drawImage(cedarTex, MAP_WIDTH - 94, by - 68, 112, 136);
       }
 
+      ctx.restore();
+    });
+
+    // 5. DOSSEL SUPERIOR DA FLORESTA DENSA (2100x1400 escalado 2x = 4200x2800)
+    // Renderizado ACIMA do Lobisomem (depth 3850) para que, quando o Lobo entrar na floresta densa,
+    // ele fique visualmente coberto pelas copas fechadas das árvores!
+    this.createCanvas(scene, 'baked_dense_forest_canopy', 2100, 1400, (ctx) => {
+      ctx.save();
+      ctx.scale(0.5, 0.5);
+      for (let fy = 70; fy <= MAP_HEIGHT - 60; fy += 46) {
+        for (let fx = 70; fx <= MAP_WIDTH - 60; fx += 46) {
+          const jx = ((fx * 17 + fy * 13) % 24) - 12;
+          const jy = ((fx * 11 + fy * 23) % 22) - 11;
+          const px = fx + jx;
+          const py = fy + jy;
+
+          if (px > RIVER_LEFT_BANK - 46 && px < RIVER_RIGHT_BANK + 46) continue;
+          if (
+            isOnPathOrClearing(px, py) ||
+            isOnPathOrClearing(px - 32, py) ||
+            isOnPathOrClearing(px + 32, py) ||
+            isOnPathOrClearing(px, py - 32) ||
+            isOnPathOrClearing(px, py + 32)
+          ) {
+            continue;
+          }
+
+          const scaleVar = 0.96 + ((fx * 7 + fy * 3) % 24) * 0.014;
+          const treeW = Math.round(112 * scaleVar);
+          const treeH = Math.round(138 * scaleVar);
+          ctx.drawImage(cedarTex, px - treeW / 2, py - treeH + 22, treeW, treeH);
+        }
+      }
       ctx.restore();
     });
   }

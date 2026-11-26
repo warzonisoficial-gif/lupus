@@ -15,6 +15,7 @@ import {
   VILLAGE_ZONES,
   WEREWOLF_TOMBS,
   isPlayerHiddenByEnvironment,
+  isOnPathOrClearing,
   isPointInChurchSacredGround,
   isPointInRunicCircle,
   isPointInShallowLake,
@@ -156,6 +157,12 @@ export class VillageScene extends Phaser.Scene {
       .image(MAP_WIDTH / 2, MAP_HEIGHT / 2, 'baked_skeld_village_layout')
       .setScale(2)
       .setDepth(1);
+
+    // 1.1. Dossel Superior da Floresta Densa (Renderizado ACIMA dos personagens para cobrir o Lobisomem quando ele entra na floresta!)
+    this.add
+      .image(MAP_WIDTH / 2, MAP_HEIGHT / 2, 'baked_dense_forest_canopy')
+      .setScale(2)
+      .setDepth(3850);
 
     // 2. TERRITÓRIO CENTRAL: Praça da Catedral & Sino Sagrado (2100, 1400)
     this.add.image(CHURCH_CENTER.x, CHURCH_CENTER.y - 35, 'building_church_25d').setDepth(6);
@@ -538,12 +545,14 @@ export class VillageScene extends Phaser.Scene {
       const rawY = this.predictedY + normY * step;
 
       if (myPlayer.isAlive) {
+        // O Lobisomem (myPlayer.isWerewolf) pode entrar na Floresta Densa fora das trilhas para se esconder!
         const resolved = resolveMapCollisions(
           this.predictedX,
           this.predictedY,
           rawX,
           rawY,
-          this.snapshot.barricades
+          this.snapshot.barricades,
+          myPlayer.isWerewolf
         );
         this.predictedX = resolved.x;
         this.predictedY = resolved.y;
@@ -847,15 +856,17 @@ export class VillageScene extends Phaser.Scene {
       node.wasAbilityUnlocked = p.abilityUnlocked;
 
       // Verifica se o jogador está escondido dentro de um Barril, sob a Copa da Grande Árvore Ancestral,
-      // no Milharal Alto, no Bosque de Caça do Sul ou embaixo da Ponte do Rio!
+      // no Milharal Alto, no Bosque de Caça do Sul, embaixo da Ponte do Rio OU se é o Lobisomem dentro da Floresta Densa!
       const checkX = isSelf ? this.predictedX : p.x;
       const checkY = isSelf ? this.predictedY : p.y;
+      const inDenseForest = !isOnPathOrClearing(checkX, checkY);
       const hiddenByLandmark = isPlayerHiddenByEnvironment(checkX, checkY);
 
       const hideFromViewer =
         Boolean(p.hiddenInBarrelId) ||
         Boolean(p.hiddenInTombId) ||
         hiddenByLandmark ||
+        (inDenseForest && !isSelf && myPlayer?.isAlive) ||
         (isInvisible && !isSelf && myPlayer?.isAlive) ||
         (!p.isAlive && myPlayer?.isAlive && this.snapshot.phase !== 'POST_GAME');
 
@@ -908,7 +919,9 @@ export class VillageScene extends Phaser.Scene {
       node.sprite.setPosition(renderX, renderY + workBobY);
       node.sprite.setFlipX(node.facingLeft);
       node.sprite.setDepth(renderY);
-      node.sprite.setAlpha(!p.isAlive ? 0.42 : isInvisible ? 0.45 : 1);
+      node.sprite.setAlpha(
+        !p.isAlive ? 0.42 : isInvisible ? 0.45 : inDenseForest && isSelf ? 0.62 : 1
+      );
       node.sprite.setVisible(true);
 
       // Enquanto realiza a missão (isPerformingMission):
