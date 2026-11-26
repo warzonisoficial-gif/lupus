@@ -599,15 +599,17 @@ export class VillageScene extends Phaser.Scene {
       }
     }
 
-    // 1.5. Atualiza os Barris de Esconderijo da Vila das Cabanas
+    // 1.5. Atualiza o Barril de Esconderijo da Vila das Cabanas
     for (const hb of HIDING_BARRELS) {
       const spr = this.hidingBarrelSprites.get(hb.id);
       if (!spr) continue;
       const amIHiddenHere = myPlayer?.isAlive && myPlayer?.hiddenInBarrelId === hb.id;
+      const alreadyUsedByMe = Boolean(myPlayer?.usedBarrelIds?.includes(hb.id)) && !amIHiddenHere;
       spr.setTexture(amIHiddenHere ? 'prop_hiding_barrel_peek_25d' : 'prop_hiding_barrel_25d');
+      spr.setAlpha(alreadyUsedByMe ? 0.65 : 1);
 
       const distToBarrel = Math.hypot(hb.x - this.predictedX, hb.y - this.predictedY);
-      if (myPlayer?.isAlive && (amIHiddenHere || distToBarrel <= BARREL_INTERACT_RADIUS)) {
+      if (myPlayer?.isAlive && !alreadyUsedByMe && (amIHiddenHere || distToBarrel <= BARREL_INTERACT_RADIUS)) {
         this.overlayGraphics.lineStyle(2.5, amIHiddenHere ? 0x40916c : 0xd99b26, 0.88);
         this.overlayGraphics.strokeEllipse(hb.x, hb.y - 4, 54, 22);
       }

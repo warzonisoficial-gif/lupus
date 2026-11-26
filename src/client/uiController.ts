@@ -636,14 +636,17 @@ export class UIController {
     }
 
     // --- BOTÃO 0A: ENTRAR / SAIR DO BARRIL DE ESCONDERIJO [F] (Nas Cabanas da Vila) ---
-    const nearBarrel = HIDING_BARRELS.some(
-      (b) => Math.hypot(b.x - me.x, b.y - me.y) <= BARREL_INTERACT_RADIUS
+    // Depois que o personagem entra em um barril/baú e sai, ele não pode entrar de novo no mesmo!
+    const nearAvailableBarrel = HIDING_BARRELS.some(
+      (b) =>
+        Math.hypot(b.x - me.x, b.y - me.y) <= BARREL_INTERACT_RADIUS &&
+        !(me.usedBarrelIds || []).includes(b.id)
     );
     const barrelBtnLabel = document.getElementById('barrel-btn-label');
     if (me.hiddenInBarrelId) {
       btnBarrel?.classList.remove('hidden');
       if (barrelBtnLabel) barrelBtnLabel.textContent = 'SAIR';
-    } else if (nearBarrel && !(me.isWerewolf && me.isTransformed)) {
+    } else if (nearAvailableBarrel && !(me.isWerewolf && me.isTransformed)) {
       btnBarrel?.classList.remove('hidden');
       if (barrelBtnLabel) barrelBtnLabel.textContent = 'ENTRAR';
     } else {

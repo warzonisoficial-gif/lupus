@@ -138,6 +138,7 @@ export class GameRoom {
       isStunnedEnd: 0,
       isRevealedEnd: 0,
       hiddenInBarrelId: null,
+      usedBarrelIds: [],
       hiddenInTombId: null,
       removingBarricadeId: null,
       removingBarricadeEndsAt: 0,
@@ -257,6 +258,7 @@ export class GameRoom {
       p.isStunnedEnd = 0;
       p.isInvisibleEnd = 0;
       p.hiddenInBarrelId = null;
+      p.usedBarrelIds = [];
       p.hiddenInTombId = null;
       p.removingBarricadeId = null;
       p.removingBarricadeEndsAt = 0;
@@ -459,6 +461,14 @@ export class GameRoom {
       return { ok: false, message: 'Aproxime-se de um barril para se esconder!' };
     }
 
+    // Regra: Depois que um personagem entra em um barril/baú, ele NÃO pode entrar de novo no mesmo!
+    if (p.usedBarrelIds.includes(nearBarrel.id)) {
+      return {
+        ok: false,
+        message: 'Você já se escondeu neste barril/baú antes e não pode entrar nele novamente!'
+      };
+    }
+
     // Verifica se já existe outro jogador escondido nesse mesmo barril
     const occupied = Array.from(this.players.values()).some(
       (other) => other.id !== p.id && other.isAlive && other.hiddenInBarrelId === nearBarrel.id
@@ -468,6 +478,7 @@ export class GameRoom {
     }
 
     p.hiddenInBarrelId = nearBarrel.id;
+    p.usedBarrelIds.push(nearBarrel.id);
     p.x = nearBarrel.x;
     p.y = nearBarrel.y;
 

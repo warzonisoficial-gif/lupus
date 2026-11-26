@@ -159,6 +159,7 @@ export interface PlayerState {
   isStunnedEnd: number;
   isRevealedEnd: number;
   hiddenInBarrelId: string | null; // ID do barril onde o jogador está escondido
+  usedBarrelIds: string[];         // IDs dos barris/baús nos quais o jogador já entrou nesta partida (não pode entrar de novo no mesmo!)
   hiddenInTombId: string | null;   // ID da tumba do cemitério onde o Lobisomem está escondido
   removingBarricadeId: string | null; // ID da barricada que o jogador está removendo (4s incancelável!)
   removingBarricadeEndsAt: number;
