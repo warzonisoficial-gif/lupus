@@ -384,34 +384,31 @@ export class UIController {
     document.getElementById('btn-open-rooms')?.addEventListener('click', () => {
       this.lobbyMinimizedManually = false;
       this.socket.emit('list_rooms');
+      this.setLobbyMenuStep('PUBLIC_ROOMS');
       document.getElementById('modal-brazil-lobby')?.classList.remove('hidden');
       this.renderBrazilLobbyModal();
     });
 
-    document.getElementById('btn-close-lobby-modal')?.addEventListener('click', () => {
-      this.lobbyMinimizedManually = true;
-      document.getElementById('modal-brazil-lobby')?.classList.add('hidden');
+    document.getElementById('btn-home-open-public-rooms')?.addEventListener('click', () => {
+      this.socket.emit('list_rooms');
+      this.setLobbyMenuStep('PUBLIC_ROOMS');
+      this.renderBrazilLobbyModal();
     });
 
-    document.getElementById('btn-lobby-add-player')?.addEventListener('click', () => {
-      this.socket.emit('lobby_add_player', (res: any) => {
-        if (res?.message) this.showToast(res.message);
-      });
+    document.getElementById('btn-home-open-create-room')?.addEventListener('click', () => {
+      this.setLobbyMenuStep('CREATE_ROOM');
     });
 
-    document.getElementById('btn-lobby-remove-player')?.addEventListener('click', () => {
-      this.socket.emit('lobby_remove_player', (res: any) => {
-        if (res?.countdownReset) {
-          this.lobbyResetAlertUntil = Date.now() + 3500;
-        }
-        if (res?.message) this.showToast(res.message);
-      });
+    document.getElementById('btn-public-to-create')?.addEventListener('click', () => {
+      this.setLobbyMenuStep('CREATE_ROOM');
     });
 
-    document.getElementById('btn-lobby-fill-instant')?.addEventListener('click', () => {
-      const req = this.latestSnapshot?.requiredPlayers || 9;
-      this.socket.emit('start_match', req);
-      this.showToast(`Partida iniciada com ${req} jogadores!`);
+    document.getElementById('btn-back-to-home-from-rooms')?.addEventListener('click', () => {
+      this.setLobbyMenuStep('HOME');
+    });
+
+    document.getElementById('btn-back-to-home-from-create')?.addEventListener('click', () => {
+      this.setLobbyMenuStep('HOME');
     });
 
     document.getElementById('form-create-room')?.addEventListener('submit', (e) => {
@@ -715,60 +712,21 @@ export class UIController {
     box.scrollTop = box.scrollHeight;
   }
 
+  private setLobbyMenuStep(step: 'HOME' | 'PUBLIC_ROOMS' | 'CREATE_ROOM') {
+    const stepHome = document.getElementById('lobby-step-home');
+    const stepRooms = document.getElementById('lobby-step-public-rooms');
+    const stepCreate = document.getElementById('lobby-step-create-room');
+
+    stepHome?.classList.toggle('hidden', step !== 'HOME');
+    stepRooms?.classList.toggle('hidden', step !== 'PUBLIC_ROOMS');
+    stepCreate?.classList.toggle('hidden', step !== 'CREATE_ROOM');
+  }
+
   private renderBrazilLobbyModal() {
     const snap = this.latestSnapshot;
     if (!snap) return;
 
-    const currentTitle = document.getElementById('lobby-room-current-title');
-    const accumulator = document.getElementById('lobby-player-accumulator');
-    const pill = document.getElementById('lobby-countdown-pill');
-    const banner = document.getElementById('lobby-status-banner');
-    const rosterBadge = document.getElementById('lobby-roster-badge');
-    const playersListEl = document.getElementById('lobby-players-list');
     const roomsGridEl = document.getElementById('brazil-rooms-grid');
-
-    if (currentTitle) currentTitle.textContent = `${snap.roomName} (${snap.regionLabel})`;
-    if (accumulator) {
-      accumulator.textContent = `${snap.players.length} / ${snap.requiredPlayers} jogadores necessários (Máx: ${snap.maxPlayers})`;
-    }
-    if (rosterBadge) {
-      rosterBadge.textContent = `${snap.players.length} / ${snap.requiredPlayers}`;
-    }
-
-    const now = Date.now();
-    if (banner && pill) {
-      banner.classList.remove('counting-down', 'reset-alert');
-      if (snap.phase !== 'LOBBY') {
-        pill.textContent = 'Partida em andamento';
-      } else if (snap.lobbyCountdownSec !== null) {
-        banner.classList.add('counting-down');
-        pill.textContent = `Time completo! Iniciando em ${snap.lobbyCountdownSec}s...`;
-      } else if (now < this.lobbyResetAlertUntil) {
-        banner.classList.add('reset-alert');
-        pill.textContent = 'Jogador saiu! CONTADOR ZERADO — Aguardando jogadores...';
-      } else {
-        const missing = Math.max(0, snap.requiredPlayers - snap.players.length);
-        pill.textContent =
-          missing > 0
-            ? `Aguardando mais ${missing} jogador(es) para iniciar...`
-            : 'Preparando início...';
-      }
-    }
-
-    if (playersListEl) {
-      playersListEl.innerHTML = snap.players
-        .map((p) => {
-          const cls = CLASSES_BY_ID[p.classId];
-          const isMe = p.id === this.socket.id;
-          return `
-            <div class="lobby-player-chip">
-              <strong>${this.escapeHtml(p.name)}${isMe ? ' (Você)' : ''}</strong>
-              <span>${this.escapeHtml(cls.name)}</span>
-            </div>
-          `;
-        })
-        .join('');
-    }
 
     if (roomsGridEl && this.roomsList.length > 0) {
       const sig = this.roomsList
@@ -787,26 +745,28 @@ export class UIController {
             r.phase === 'LOBBY'
               ? r.lobbyCountdownSec !== null
                 ? `Iniciando em ${r.lobbyCountdownSec}s`
-                : `No Lobby (${r.playerCount}/${r.requiredPlayers})`
+                : `${r.playerCount} / ${r.requiredPlayers} jogadores`
               : `Em Jogo (${r.playerCount}/${r.maxPlayers})`;
           const creatorInfo =
             r.isCustom && r.creatorName
-              ? `<span class="br-room-creator-tag">Criada por ${this.escapeHtml(r.creatorName)}</span>`
+              ? `<span class="br-room-creator-tag">Host: ${this.escapeHtml(r.creatorName)}</span>`
               : '';
           return `
             <div class="br-room-card ${isCurrent ? 'active-room' : ''}">
-              <div class="br-room-header">
-                <h4>${this.escapeHtml(r.roomName)}</h4>
-                ${creatorInfo}
+              <div class="br-room-info-left">
+                <div class="br-room-header">
+                  <h4>${this.escapeHtml(r.roomName)}</h4>
+                  ${creatorInfo}
+                </div>
+                <div class="br-room-region">${this.escapeHtml(r.regionLabel)}</div>
               </div>
-              <div class="br-room-region">${this.escapeHtml(r.regionLabel)}</div>
-              <div class="br-room-meta">
-                <span>${this.escapeHtml(statusLabel)}</span>
+              <div class="br-room-right-action">
+                <span class="br-room-count-pill">${this.escapeHtml(statusLabel)}</span>
                 <button
-                  class="${isCurrent ? 'btn-primary' : 'btn-secondary'} btn-sm"
+                  class="btn-primary btn-sm"
                   data-join-room="${this.escapeHtml(r.roomId)}"
                 >
-                  ${isCurrent ? 'Sala Atual' : 'Entrar na Sala'}
+                  Entrar
                 </button>
               </div>
             </div>
@@ -825,7 +785,6 @@ export class UIController {
             { roomId, playerName },
             (res?: { ok: boolean; message: string }) => {
               if (res?.ok) {
-                // Fecha o menu de salas na hora que entra na sala para o jogador caminhar com seu boneco e escolher personagem!
                 this.lobbyMinimizedManually = true;
                 document.getElementById('modal-brazil-lobby')?.classList.add('hidden');
               }

@@ -302,109 +302,108 @@
         </div>
       </aside>
 
-      <!-- MODAL 0: TELA DE ENTRADA & ESCOLHA DE SALA (Fecha automaticamente ao entrar na sala para liberar o boneco no mapa!) -->
+      <!-- FLUXO DE ENTRADA ESTILO AMONG US (TELA 1: MENU PRINCIPAL -> TELA 2: SALAS PÚBLICAS / TELA 3: CRIAR SALA) -->
       <div id="modal-brazil-lobby" class="modal-backdrop">
-        <div class="modal-window wide-window lobby-window">
-          <div class="modal-header">
-            <div>
-              <span class="modal-eyebrow">ECLIPSE NO VILAREJO • SERVIDORES DO BRASIL</span>
-              <h2>Escolha ou Crie uma Sala para Entrar</h2>
-            </div>
-            <button id="btn-close-lobby-modal" class="btn-primary">Entrar na Sala Atual</button>
+        <!-- TELA 1: MENU PRINCIPAL DO JOGO (Limpo, focado e atmosférico) -->
+        <div id="lobby-step-home" class="modal-window home-menu-window">
+          <div class="home-brand-header">
+            <span class="modal-eyebrow">DEDUÇÃO SOCIAL & TERROR ASSIMÉTRICO MULTIPLAYER</span>
+            <h1 class="home-game-title">Eclipse no Vilarejo</h1>
+            <p class="home-game-subtitle">
+              1 Lobisomem infiltrado contra a Vila. Faça sua missão, sobreviva ao Eclipse e julgue no Altar da Igreja.
+            </p>
           </div>
 
-          <div class="lobby-top-bar">
-            <div class="lobby-name-field">
-              <label for="lobby-player-name">Seu Nome no Vilarejo:</label>
+          <div class="home-name-box">
+            <label for="lobby-player-name">SEU NOME NO VILAREJO</label>
+            <input
+              id="lobby-player-name"
+              type="text"
+              maxlength="20"
+              value="Você (Jogador)"
+              placeholder="Digite seu nome..."
+            />
+          </div>
+
+          <div class="home-main-actions">
+            <button id="btn-home-open-public-rooms" class="btn-primary btn-hero-action" type="button">
+              Salas Públicas
+            </button>
+            <button id="btn-home-open-create-room" class="btn-secondary btn-hero-action" type="button">
+              Criar Sala
+            </button>
+          </div>
+        </div>
+
+        <!-- TELA 2: LISTA DE SALAS PÚBLICAS (Escolha uma sala e clique em Entrar) -->
+        <div id="lobby-step-public-rooms" class="modal-window public-rooms-window hidden">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">SERVIDORES DO BRASIL</span>
+              <h2>Salas Públicas</h2>
+            </div>
+            <div class="public-rooms-top-btns">
+              <button id="btn-public-to-create" class="btn-secondary btn-sm" type="button">
+                + Criar Sala
+              </button>
+              <button id="btn-back-to-home-from-rooms" class="btn-secondary btn-sm" type="button">
+                Voltar
+              </button>
+            </div>
+          </div>
+
+          <div id="brazil-rooms-grid" class="brazil-rooms-grid"></div>
+        </div>
+
+        <!-- TELA 3: CRIAR NOVA SALA -->
+        <div id="lobby-step-create-room" class="modal-window create-room-window hidden">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">CONFIGURAR PARTIDA</span>
+              <h2>Criar Sala</h2>
+            </div>
+            <button id="btn-back-to-home-from-create" class="btn-secondary btn-sm" type="button">
+              Voltar
+            </button>
+          </div>
+
+          <form id="form-create-room" class="create-room-stack-form" autocomplete="off">
+            <div class="create-field-group">
+              <label for="create-room-name">Nome da Sala</label>
               <input
-                id="lobby-player-name"
+                id="create-room-name"
                 type="text"
-                maxlength="20"
-                value="Você (Jogador)"
-                placeholder="Digite seu nome..."
+                maxlength="32"
+                placeholder="Ex: Vila Sombria..."
+                required
               />
             </div>
 
-            <div class="lobby-countdown-banner" id="lobby-status-banner">
-              <div class="lobby-status-main">
-                <span id="lobby-room-current-title">Sala Brasil #1 — Serra da Mantiqueira</span>
-                <strong id="lobby-player-accumulator">1 / 9 jogadores necessários</strong>
-              </div>
-              <div id="lobby-countdown-pill" class="lobby-countdown-pill">
-                Aguardando acumular 9 jogadores...
-              </div>
-            </div>
-          </div>
-
-          <div class="lobby-split-grid">
-            <!-- Coluna Esquerda: Criar Sala + Lista das Salas Brasileiras -->
-            <div class="lobby-rooms-col">
-              <form id="form-create-room" class="lobby-create-room-box" autocomplete="off">
-                <div class="lobby-section-title">
-                  <h3>Criar Nova Sala Brasileira</h3>
-                  <span>Qualquer jogador pode criar sua sala</span>
-                </div>
-                <div class="create-room-fields">
-                  <input
-                    id="create-room-name"
-                    type="text"
-                    maxlength="32"
-                    placeholder="Nome da sala (ex: Noite na Vila)..."
-                    required
-                  />
-                  <select id="create-room-region" aria-label="Servidor Regional do Brasil">
-                    <option value="BR • Sudeste (São Paulo • 12ms)">BR • Sudeste (São Paulo)</option>
-                    <option value="BR • Sudeste (Minas Gerais • 15ms)">BR • Sudeste (Minas Gerais)</option>
-                    <option value="BR • Sul (Porto Alegre • 19ms)">BR • Sul (Porto Alegre)</option>
-                    <option value="BR • Nordeste (Salvador • 24ms)">BR • Nordeste (Salvador)</option>
-                    <option value="BR • Norte (Manaus • 32ms)">BR • Norte (Manaus)</option>
-                    <option value="BR • Centro-Oeste (Goiânia • 18ms)">BR • Centro-Oeste (Goiânia)</option>
-                  </select>
-                  <select id="create-room-min-players" aria-label="Mínimo de jogadores para iniciar">
-                    <option value="9" selected>9 Jogadores (Padrão)</option>
-                    <option value="6">6 Jogadores (Rápida)</option>
-                    <option value="12">12 Jogadores (Completa)</option>
-                  </select>
-                  <button type="submit" id="btn-create-custom-room" class="btn-primary btn-sm">
-                    Criar Sala
-                  </button>
-                </div>
-              </form>
-
-              <div class="lobby-section-title">
-                <h3>Escolha uma Sala Brasileira</h3>
-                <span>Oficiais e Criadas por Jogadores</span>
-              </div>
-              <div id="brazil-rooms-grid" class="brazil-rooms-grid"></div>
+            <div class="create-field-group">
+              <label for="create-room-region">Região do Servidor</label>
+              <select id="create-room-region">
+                <option value="BR • Sudeste (São Paulo • 12ms)">BR • Sudeste (São Paulo)</option>
+                <option value="BR • Sudeste (Minas Gerais • 15ms)">BR • Sudeste (Minas Gerais)</option>
+                <option value="BR • Sul (Porto Alegre • 19ms)">BR • Sul (Porto Alegre)</option>
+                <option value="BR • Nordeste (Salvador • 24ms)">BR • Nordeste (Salvador)</option>
+                <option value="BR • Norte (Manaus • 32ms)">BR • Norte (Manaus)</option>
+                <option value="BR • Centro-Oeste (Goiânia • 18ms)">BR • Centro-Oeste (Goiânia)</option>
+              </select>
             </div>
 
-            <!-- Coluna Direita: Jogadores Acumulados na Sala Atual + Simulador de Entrada/Saída -->
-            <div class="lobby-roster-col">
-              <div class="lobby-section-title">
-                <h3>Jogadores na Sala Atual</h3>
-                <span id="lobby-roster-badge">1 / 9</span>
-              </div>
-
-              <div id="lobby-players-list" class="lobby-players-list"></div>
-
-              <div class="lobby-sim-box">
-                <p class="section-hint">
-                  Simule a entrada de jogadores até completar <strong>9/9</strong> (inicia o contador de 5s). Se alguém sair depois do time completo, <strong>o contador zera imediatamente</strong>!
-                </p>
-                <div class="lobby-sim-actions">
-                  <button id="btn-lobby-add-player" class="btn-primary">
-                    + Entrada de Jogador BR
-                  </button>
-                  <button id="btn-lobby-remove-player" class="btn-secondary">
-                    - Saída de Jogador (Zera Contador)
-                  </button>
-                  <button id="btn-lobby-fill-instant" class="btn-secondary">
-                    Lotar e Iniciar Agora (9/9)
-                  </button>
-                </div>
-              </div>
+            <div class="create-field-group">
+              <label for="create-room-min-players">Jogadores para Iniciar</label>
+              <select id="create-room-min-players">
+                <option value="9" selected>9 Jogadores (Padrão)</option>
+                <option value="6">6 Jogadores (Rápida)</option>
+                <option value="12">12 Jogadores (Completa)</option>
+              </select>
             </div>
-          </div>
+
+            <button type="submit" id="btn-create-custom-room" class="btn-primary btn-hero-action">
+              Criar e Entrar na Sala
+            </button>
+          </form>
         </div>
       </div>
 

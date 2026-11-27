@@ -1010,153 +1010,146 @@ button {
   color: var(--text-muted-tan);
 }
 
-/* Lobby de Entrada & Salas Brasileiras */
-.lobby-window {
-  max-width: 980px;
+/* Fluxo de Entrada Estilo Among Us:
+   1. Menu Principal (Home)
+   2. Salas Públicas
+   3. Criar Sala */
+.home-menu-window {
+  max-width: 440px;
+  padding: 28px 26px;
+  gap: 20px;
+  text-align: center;
 }
 
-.lobby-top-bar {
-  display: grid;
-  grid-template-columns: 270px 1fr;
-  gap: 14px;
-  align-items: stretch;
-}
-
-.lobby-name-field {
-  background-color: #110c08;
-  border: 1.5px solid var(--border-wood);
-  border-radius: 8px;
-  padding: 10px 12px;
+.home-brand-header {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
 }
 
-.lobby-name-field label {
-  font-size: 11px;
-  font-weight: 700;
+.home-game-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--text-parchment);
+  letter-spacing: -0.01em;
+}
+
+.home-game-subtitle {
+  font-size: 13px;
+  color: var(--text-muted-tan);
+  line-height: 1.45;
+  max-width: 360px;
+}
+
+.home-name-box {
+  background-color: #110c08;
+  border: 1.5px solid var(--border-wood);
+  border-radius: 9px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+}
+
+.home-name-box label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   color: var(--text-muted-tan);
 }
 
-.lobby-name-field input {
+.home-name-box input {
+  width: 100%;
   background-color: #070a08;
-  border: 1px solid #5c3d24;
-  border-radius: 6px;
-  padding: 7px 10px;
+  border: 1.5px solid #5c3d24;
+  border-radius: 7px;
+  padding: 10px 12px;
   color: var(--text-parchment);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   outline: none;
 }
 
-.lobby-name-field input:focus {
+.home-name-box input:focus {
   border-color: var(--accent-amber);
 }
 
-.lobby-countdown-banner {
-  background-color: #0e1712;
-  border: 1.5px solid #2b4c38;
-  border-radius: 8px;
-  padding: 10px 14px;
+.home-main-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-hero-action {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  border-radius: 9px;
+}
+
+/* Tela 2: Salas Públicas */
+.public-rooms-window {
+  max-width: 680px;
+  padding: 22px;
+  gap: 16px;
+}
+
+.public-rooms-top-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brazil-rooms-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.br-room-card {
+  background-color: #120d09;
+  border: 1.5px solid var(--border-wood);
+  border-radius: 10px;
+  padding: 13px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
-.lobby-countdown-banner.counting-down {
-  background-color: #172a1e;
+.br-room-card:hover {
+  border-color: var(--border-bronze);
+  background-color: #17110c;
+}
+
+.br-room-card.active-room {
+  background-color: #102117;
   border-color: #52b788;
 }
 
-.lobby-countdown-banner.reset-alert {
-  background-color: #261212;
-  border-color: #dc2626;
-}
-
-.lobby-status-main {
+.br-room-info-left {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
-.lobby-status-main span {
-  font-size: 11px;
-  color: #a3cfbb;
-  font-weight: 700;
-}
-
-.lobby-status-main strong {
-  font-size: 15px;
-  color: var(--text-parchment);
-}
-
-.lobby-countdown-pill {
-  padding: 7px 14px;
-  background-color: #140f0a;
-  border: 1.5px solid #5c3d24;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--accent-amber);
-  white-space: nowrap;
-}
-
-.lobby-split-grid {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 14px;
-  align-items: start;
-}
-
-.lobby-section-title {
+.br-room-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.lobby-section-title h3 {
-  font-size: 13px;
-  color: var(--text-parchment);
-}
-
-.lobby-section-title span {
-  font-size: 11px;
-  color: var(--text-muted-tan);
-}
-
-.lobby-create-room-box {
-  background-color: #101612;
-  border: 1.5px solid var(--border-wood);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-
-.create-room-fields {
-  display: grid;
-  grid-template-columns: 1.4fr 1.15fr 0.95fr auto;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.create-room-fields input,
-.create-room-fields select {
-  background-color: #070a08;
-  border: 1px solid #5c3d24;
-  border-radius: 6px;
-  padding: 7px 9px;
+.br-room-header h4 {
+  font-size: 14px;
+  font-weight: 800;
   color: var(--text-parchment);
-  font-size: 12px;
-  font-weight: 600;
-  outline: none;
-  width: 100%;
-}
-
-.create-room-fields input:focus,
-.create-room-fields select:focus {
-  border-color: var(--accent-amber);
 }
 
 .br-room-creator-tag {
@@ -1165,116 +1158,81 @@ button {
   font-weight: 700;
 }
 
-.brazil-rooms-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 9px;
-}
-
-.br-room-card {
-  background-color: #120d09;
-  border: 1.5px solid var(--border-wood);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  transition: border-color 0.15s, background-color 0.15s;
-}
-
-.br-room-card.active-room {
-  background-color: #102117;
-  border-color: #52b788;
-}
-
-.br-room-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.br-room-header h4 {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--text-parchment);
-  line-height: 1.3;
-}
-
 .br-room-region {
-  font-size: 10px;
+  font-size: 11px;
   color: #74a889;
   font-weight: 600;
 }
 
-.br-room-meta {
+.br-room-right-action {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.br-room-count-pill {
+  background-color: #1b130d;
+  border: 1px solid #5c3d24;
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-parchment);
+  white-space: nowrap;
+}
+
+/* Tela 3: Criar Sala */
+.create-room-window {
+  max-width: 460px;
+  padding: 22px;
+  gap: 16px;
+}
+
+.create-room-stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.create-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.create-field-group label {
   font-size: 11px;
+  font-weight: 700;
   color: var(--text-muted-tan);
 }
 
-.lobby-roster-col {
-  background-color: #0d120e;
-  border: 1.5px solid var(--border-wood);
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.lobby-players-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
-  gap: 6px;
-  max-height: 195px;
-  overflow-y: auto;
-}
-
-.lobby-player-chip {
-  background-color: #16110c;
-  border: 1px solid #4a301c;
-  border-radius: 6px;
-  padding: 6px 9px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.lobby-player-chip strong {
-  font-size: 11px;
+.create-field-group input,
+.create-field-group select {
+  width: 100%;
+  background-color: #070a08;
+  border: 1.5px solid #5c3d24;
+  border-radius: 7px;
+  padding: 10px 12px;
   color: var(--text-parchment);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
 }
 
-.lobby-player-chip span {
-  font-size: 10px;
-  color: #74a889;
+.create-field-group input:focus,
+.create-field-group select:focus {
+  border-color: var(--accent-amber);
 }
 
-.lobby-sim-box {
-  border-top: 1px solid var(--border-wood);
-  padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.lobby-sim-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-@media (max-width: 680px) {
-  .lobby-top-bar,
-  .lobby-split-grid,
-  .create-room-fields {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .br-room-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .br-room-right-action {
+    justify-content: space-between;
   }
 }
 
@@ -2450,45 +2408,22 @@ button {
     font-size: 11px;
   }
 
-  .lobby-top-bar {
-    grid-template-columns: 210px 1fr;
-    gap: 8px;
+  .home-menu-window {
+    padding: 16px 20px;
+    gap: 12px;
   }
 
-  .lobby-name-field,
-  .lobby-countdown-banner {
-    padding: 6px 10px;
-  }
-
-  .lobby-split-grid {
-    grid-template-columns: 1.45fr 1fr;
-    gap: 10px;
-  }
-
-  .lobby-create-room-box {
-    padding: 6px 9px;
-    margin-bottom: 7px;
-  }
-
-  .create-room-fields {
-    grid-template-columns: 1.3fr 1.1fr 0.9fr auto;
-    gap: 6px;
-  }
-
-  .create-room-fields input,
-  .create-room-fields select {
-    padding: 4px 7px;
-    font-size: 11px;
+  .home-menu-title {
+    font-size: 22px;
   }
 
   .brazil-rooms-grid {
-    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
     gap: 6px;
   }
 
   .br-room-card {
-    padding: 7px 9px;
-    gap: 4px;
+    padding: 8px 12px;
+    gap: 8px;
   }
 
   /* Tribunal em 2 colunas lado a lado na tela horizontal para ver Pistas + Acusados + Botões + Chat sem rolagem profunda */
